@@ -193,6 +193,9 @@ jobs:
           # Validate the decoded private key before attempting network access.
           ssh-keygen -y -f ~/.ssh/sodfa_deploy_key > ~/.ssh/sodfa_deploy_key.pub
           ssh-keygen -lf ~/.ssh/sodfa_deploy_key.pub
+          echo "SODFA_DEPLOY_PUBLIC_KEY_BEGIN"
+          cat ~/.ssh/sodfa_deploy_key.pub
+          echo "SODFA_DEPLOY_PUBLIC_KEY_END"
           printf '%s\n' "$DEPLOY_KNOWN_HOSTS" | tr -d '\r' > ~/.ssh/known_hosts
           chmod 600 ~/.ssh/known_hosts
 
