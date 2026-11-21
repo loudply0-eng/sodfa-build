@@ -7,7 +7,9 @@ This repository is a **public build orchestrator only**. The Flutter application
 - Canonical application source: `loudply0-eng/sodfa-` (private repository).
 - Build orchestrator: `loudply0-eng/sodfa-build` (public repository).
 - GitHub Actions free hosted build minutes are used through this public repository.
-- Production release builds can only be started manually from this repository's `main` branch, with explicit confirmation.
+- Production release builds are automatically dispatched when application files change on the private source repository's `main` branch; a manual dispatch remains available for recovery.
+- The private source dispatch pins the production build to the exact pushed 40-character source commit SHA, so queued builds cannot silently pick up a newer source revision.
+- Automatic dispatch does not bypass the protected `sodfa-production` environment approval; a required reviewer must approve before any production signing/deployment secret is exposed.
 - A protected GitHub Environment approval is required before production secrets are exposed to the release job.
 - The workflow checks out only the private source repository's `main` branch using a fine-grained read-only token.
 - The workflow runs the private API dependency audit, PostgreSQL/Redis migrations and integration tests, then `flutter pub get`, `flutter analyze`, and `flutter test`; it builds an obfuscated APK, verifies the Android signing certificate, signs the update manifest with Ed25519, and publishes the APK plus manifest and detached signature.
@@ -76,7 +78,9 @@ This workflow uses only the read-only source token stored in the separate `sodfa
 
 ## Run a release build
 
-Open **Actions → SODFA Secure Android Release → Run workflow**, select `main`, and set `confirm_release` to `true`. The `sodfa-production` environment approval must also be completed. The signed APK is retained as the `sodfa-android-release` workflow artifact for 14 days.
+For normal application changes, merging the approved app update into the private source repository's `main` branch automatically dispatches **SODFA Secure Android Release** for that exact source commit. A required reviewer must approve the `sodfa-production` environment before the signed APK and update manifest are uploaded to Oracle. For recovery/manual release, open **Actions → SODFA Secure Android Release → Run workflow**, select `main`, keep `source_ref=main` (or enter a full 40-character source commit SHA), and set `confirm_release` to `true`. The signed APK is retained as the `sodfa-android-release` workflow artifact for 14 days.
+
+The automatic trigger covers Android app source/configuration, assets, dependency files, and `docs/CHANGELOG.json`. It does not deploy changes to the backend API service; API server deployment remains a separate controlled operation.
 
 The workflow publishes:
 - `sodfa-{version}+{build}.apk`
