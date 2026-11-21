@@ -101,8 +101,8 @@ jobs:
               raise SystemExit("The private-source release workflow must not run on pull requests or pushes.")
           if ("scp " in release_text or "ssh " in release_text) and not (
               "openssl pkeyutl -sign -rawin" in release_text
-              and "SODFA_UPDATE_PRIVATE_KEY_PEM" in release_text
-              and "SODFA_DEPLOY_KNOWN_HOSTS" in release_text
+              and "SODFA_PROD_UPDATE_PRIVATE_KEY_PEM" in release_text
+              and "SODFA_PROD_DEPLOY_KNOWN_HOSTS" in release_text
               and "StrictHostKeyChecking=yes" in release_text
           ):
               raise SystemExit("Server publishing requires a signed manifest and pinned SSH host keys.")
