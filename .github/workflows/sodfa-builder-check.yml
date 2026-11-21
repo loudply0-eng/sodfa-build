@@ -40,7 +40,11 @@ jobs:
               exit 1
             fi
           done
-          if git ls-files | grep -E '(^|/)(pubspec\\.(yaml|lock)|analysis_options\\.yaml)$|\\.(dart|kt|kts|gradle)$|(^|/)gradlew$|gradle-wrapper\\.jar
+          if git ls-files | grep -E '(^|/)(pubspec\.(yaml|lock)|analysis_options\.yaml)$|\.(dart|kt|kts|gradle)$|(^|/)gradlew$|gradle-wrapper\.jar$'; then
+            echo "::error::Flutter or Android application source was found in the public build orchestrator."
+            exit 1
+          fi
+
       - name: Check secure release workflow policy
         shell: bash
         run: |
