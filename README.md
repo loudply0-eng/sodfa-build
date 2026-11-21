@@ -10,7 +10,7 @@ This repository is a **public build orchestrator only**. The Flutter application
 - Production release builds can only be started manually from this repository's `main` branch, with explicit confirmation.
 - A protected GitHub Environment approval is required before production secrets are exposed to the release job.
 - The workflow checks out only the private source repository's `main` branch using a fine-grained read-only token.
-- The workflow runs `flutter pub get`, `flutter analyze`, and `flutter test`; it then builds an obfuscated APK, verifies the Android signing certificate, signs the update manifest with Ed25519, and publishes the APK plus manifest and detached signature.
+- The workflow runs the private API dependency audit, PostgreSQL/Redis migrations and integration tests, then `flutter pub get`, `flutter analyze`, and `flutter test`; it builds an obfuscated APK, verifies the Android signing certificate, signs the update manifest with Ed25519, and publishes the APK plus manifest and detached signature.
 - Private source build logs, Android signing files, update signing keys, and Dart obfuscation symbols are not uploaded as artifacts.
 - The app verifies the detached Ed25519 signature on the exact manifest bytes before parsing update metadata. It also enforces HTTPS, same-origin APK hosting under `/updates/sodfa/`, and SHA-256 verification.
 
@@ -57,7 +57,7 @@ tail -c 32 sodfa-update-public.der | base64 -w0 > sodfa-update-public-key.txt
 
 Open **Actions → SODFA Private Source Validation → Run workflow**, select the builder's `main` branch, enter the private source branch or commit in `source_ref`, and set `confirm_validation` to `true`.
 
-This workflow uses the read-only source token only for checkout. It does not receive the Android signing key, update-signing private key, or deployment SSH key. It suppresses private source logs, runs dependency install, analysis, tests, a debug build, and an obfuscated Release smoke build with a temporary disposable key. The protected environment approval is still required because the private source read token is used.
+This workflow uses the read-only source token only for checkout. It does not receive the Android signing key, update-signing private key, or deployment SSH key. It starts disposable PostgreSQL 18 and Redis 8 services, installs private API dependencies, audits production dependencies for high-severity advisories, applies database migrations, and runs API unit and integration tests. It then runs Flutter dependency installation, analysis, tests, a debug build, and an obfuscated Release smoke build with a temporary disposable key. Private source logs are suppressed and removed during cleanup. The protected environment approval is still required because the private source read token is used.
 
 ## Run a release build
 
