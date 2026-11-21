@@ -171,7 +171,7 @@ jobs:
 
           install -m 700 -d ~/.ssh
           # Accept either a normal multiline PEM secret or a literal \\n-escaped secret.
-          printf '%s' "$DEPLOY_SSH_KEY" | sed 's/\\\\n/\n/g' | tr -d '\r' > ~/.ssh/sodfa_deploy_key
+          printf '%s' "$DEPLOY_SSH_KEY" | sed 's/\\n/\n/g' | tr -d '\r' > ~/.ssh/sodfa_deploy_key
           chmod 600 ~/.ssh/sodfa_deploy_key
           # Fail early with a clear message if the configured private key is malformed.
           ssh-keygen -y -f ~/.ssh/sodfa_deploy_key > ~/.ssh/sodfa_deploy_key.pub
