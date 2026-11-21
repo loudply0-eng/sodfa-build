@@ -425,7 +425,7 @@ jobs:
              UPLOADED_SHA=\$(sha256sum '$REMOTE_APK_TMP' | awk '{print \$1}'); \
              test \"\$UPLOADED_SHA\" = '$APK_SHA256'; \
              if [ -s '$REMOTE_DIR/manifest.json' ]; then \
-               CURRENT_BUILD=\$(python3 -c 'import json,sys; print(int(json.load(open(sys.argv[1]))['build_number']))' '$REMOTE_DIR/manifest.json'); \
+               CURRENT_BUILD=\$(python3 -c 'import json,sys; print(int(json.load(open(sys.argv[1]))[\"build_number\"]))' '$REMOTE_DIR/manifest.json'); \
                if [ "\$CURRENT_BUILD" -gt '$BUILD_NUMBER' ]; then \
                  echo 'Refusing to publish an older build over a newer release.' >&2; \
                  exit 1; \
