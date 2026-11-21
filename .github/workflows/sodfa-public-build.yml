@@ -186,8 +186,8 @@ jobs:
                   pass
           if "-----BEGIN " not in raw or "PRIVATE KEY-----" not in raw:
               raise SystemExit("DEPLOY_SSH_KEY is not a recognized PEM private key; store the private key as multiline PEM or base64-encoded PEM.")
-          with open(os.path.expanduser("~/.ssh/sodfa_deploy_key"), "w", encoding="utf-8", newline="\\n") as key:
-              key.write(raw.rstrip() + "\\n")
+          with open(os.path.expanduser("~/.ssh/sodfa_deploy_key"), "w", encoding="utf-8", newline="\n") as key:
+              key.write(raw.rstrip() + "\n")
           PY
           chmod 600 ~/.ssh/sodfa_deploy_key
           # Validate the decoded private key before attempting network access.
