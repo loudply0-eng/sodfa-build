@@ -1,0 +1,61 @@
+name: SODFA Builder Security Checks
+
+on:
+  pull_request:
+    branches: [main]
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+
+jobs:
+  policy:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout builder only
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          persist-credentials: false
+
+      - name: Check public builder contains no app source
+        shell: bash
+        run: |
+          set -euo pipefail
+          for path in lib android ios web windows macos linux server; do
+            if [ -e "$path" ]; then
+              echo "::error::Application source must remain in the private SODFA source repository, not this public builder."
+              exit 1
+            fi
+          done
+
+      - name: Check secure release workflow policy
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          from pathlib import Path
+
+          path = Path(".github/workflows/sodfa-secure-release.yml")
+          text = path.read_text(encoding="utf-8")
+          required = [
+              "workflow_dispatch:",
+              "github.ref == 'refs/heads/main'",
+              "inputs.confirm_release == true",
+              "loudply0-eng/sodfa-",
+              "SODFA_SOURCE_READ_TOKEN",
+              "persist-credentials: false",
+              "environment:",
+              "sodfa-production",
+              "--obfuscate",
+              "--split-debug-info=",
+          ]
+          missing = [item for item in required if item not in text]
+          if missing:
+              raise SystemExit("Secure release policy check failed: " + ", ".join(missing))
+          if "pull_request:" in text or "push:" in text:
+              raise SystemExit("The private-source release workflow must not run on pull requests or pushes.")
+          if "scp " in text or "ssh " in text:
+              raise SystemExit("Automatic server publishing is disabled until signed update manifests are implemented.")
+          print("SODFA builder policy checks passed.")
+          PY

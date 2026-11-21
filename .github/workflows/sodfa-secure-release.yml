@@ -1,0 +1,169 @@
+name: SODFA Secure Android Release
+
+on:
+  workflow_dispatch:
+    inputs:
+      confirm_release:
+        description: "Confirm a signed release build from the private source main branch"
+        required: true
+        type: boolean
+        default: false
+
+permissions:
+  contents: read
+
+concurrency:
+  group: sodfa-secure-release
+  cancel-in-progress: false
+
+jobs:
+  release:
+    if: github.ref == 'refs/heads/main' && inputs.confirm_release == true
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    environment:
+      name: sodfa-production
+
+    steps:
+      - name: Validate required environment secrets
+        shell: bash
+        env:
+          SOURCE_TOKEN: ${{ secrets.SODFA_SOURCE_READ_TOKEN }}
+          ANDROID_KEYSTORE_BASE64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
+          ANDROID_KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+          ANDROID_KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
+          ANDROID_KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
+        run: |
+          set -euo pipefail
+          for name in SOURCE_TOKEN ANDROID_KEYSTORE_BASE64 ANDROID_KEYSTORE_PASSWORD ANDROID_KEY_ALIAS ANDROID_KEY_PASSWORD; do
+            if [ -z "${!name:-}" ]; then
+              echo "::error::Missing required secret in the sodfa-production environment: $name"
+              exit 1
+            fi
+          done
+          test "$GITHUB_EVENT_NAME" = "workflow_dispatch"
+          test "$GITHUB_REF" = "refs/heads/main"
+
+      - name: Checkout private SODFA source
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          repository: loudply0-eng/sodfa-
+          ref: main
+          token: ${{ secrets.SODFA_SOURCE_READ_TOKEN }}
+          path: source
+          fetch-depth: 1
+          persist-credentials: false
+
+      - name: Set up Java
+        uses: actions/setup-java@77dd5b2ce225ea11469928ac317850245a74ae78
+        with:
+          distribution: temurin
+          java-version: "17"
+          cache: gradle
+
+      - name: Set up Flutter
+        uses: subosito/flutter-action@1a449444c387b1966244ae4d4f8c696479add0b2
+        with:
+          flutter-version: "3.50.0"
+          channel: stable
+          cache: true
+
+      - name: Install private source dependencies
+        working-directory: source
+        shell: bash
+        run: |
+          set -euo pipefail
+          if ! flutter pub get > "$RUNNER_TEMP/sodfa-pub-get.log" 2>&1; then
+            echo "::error::Dependency installation failed. Private source logs are not exposed in this public builder."
+            exit 1
+          fi
+
+      - name: Analyze private source
+        working-directory: source
+        shell: bash
+        run: |
+          set -euo pipefail
+          if ! flutter analyze --no-fatal-infos > "$RUNNER_TEMP/sodfa-analyze.log" 2>&1; then
+            echo "::error::Flutter analysis failed. Review the private source repository checks."
+            exit 1
+          fi
+
+      - name: Run private source tests
+        working-directory: source
+        shell: bash
+        run: |
+          set -euo pipefail
+          if ! flutter test > "$RUNNER_TEMP/sodfa-tests.log" 2>&1; then
+            echo "::error::Flutter tests failed. Review the private source repository checks."
+            exit 1
+          fi
+
+      - name: Prepare Android signing key
+        shell: bash
+        env:
+          ANDROID_KEYSTORE_BASE64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
+          ANDROID_KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+          ANDROID_KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
+          ANDROID_KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
+        run: |
+          set -euo pipefail
+          printf '%s' "$ANDROID_KEYSTORE_BASE64" | tr -d '[:space:]' | base64 --decode > source/android/app/upload-keystore.jks
+          test -s source/android/app/upload-keystore.jks
+          keytool -list -v -keystore source/android/app/upload-keystore.jks \
+            -alias "$ANDROID_KEY_ALIAS" -storepass "$ANDROID_KEYSTORE_PASSWORD" \
+            > "$RUNNER_TEMP/sodfa-keystore-info.txt"
+          ACTUAL_CERT="$(awk -F': ' '/SHA256:/{gsub(/:/,"",$2); print tolower($2); exit}' "$RUNNER_TEMP/sodfa-keystore-info.txt")"
+          EXPECTED_CERT="369c770895b6f20830f5aa5891e0146623c92391c8589f73542cdd7fbe559ee2"
+          if [ "$ACTUAL_CERT" != "$EXPECTED_CERT" ]; then
+            echo "::error::The configured keystore does not match the registered SODFA release certificate."
+            exit 1
+          fi
+          cat > source/android/key.properties <<EOF
+          storeFile=upload-keystore.jks
+          storePassword=$ANDROID_KEYSTORE_PASSWORD
+          keyAlias=$ANDROID_KEY_ALIAS
+          keyPassword=$ANDROID_KEY_PASSWORD
+          EOF
+          chmod 600 source/android/key.properties source/android/app/upload-keystore.jks
+
+      - name: Build obfuscated signed APK
+        working-directory: source
+        shell: bash
+        env:
+          SODFA_UPDATE_MANIFEST_URL: https://mahmoudaljuorany.store/updates/sodfa/manifest.json
+        run: |
+          set -euo pipefail
+          if ! flutter build apk --release --obfuscate \
+            --split-debug-info="$RUNNER_TEMP/sodfa-symbols" \
+            --dart-define=SODFA_UPDATE_MANIFEST_URL="$SODFA_UPDATE_MANIFEST_URL" \
+            > "$RUNNER_TEMP/sodfa-release-build.log" 2>&1; then
+            echo "::error::The signed release build failed. Private source build logs were intentionally not published."
+            exit 1
+          fi
+          APK="build/app/outputs/flutter-apk/app-release.apk"
+          test -s "$APK"
+          APKSIGNER="$(find "$ANDROID_HOME/build-tools" -type f -name apksigner | sort -V | tail -n 1)"
+          test -n "$APKSIGNER"
+          "$APKSIGNER" verify --verbose --print-certs "$APK" > "$RUNNER_TEMP/sodfa-apk-signature.txt"
+          grep -Fqi "$EXPECTED_CERT" "$RUNNER_TEMP/sodfa-apk-signature.txt" || {
+            echo "::error::The output APK certificate does not match the registered SODFA release certificate."
+            exit 1
+          }
+
+      - name: Upload signed release APK
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9
+        with:
+          name: sodfa-android-release
+          path: source/build/app/outputs/flutter-apk/app-release.apk
+          if-no-files-found: error
+          retention-days: 14
+
+      - name: Remove signing material and obfuscation symbols
+        if: always()
+        shell: bash
+        run: |
+          rm -f source/android/key.properties source/android/app/upload-keystore.jks
+          rm -rf "$RUNNER_TEMP/sodfa-symbols" "$RUNNER_TEMP/sodfa-pub-get.log" \
+            "$RUNNER_TEMP/sodfa-analyze.log" "$RUNNER_TEMP/sodfa-tests.log" \
+            "$RUNNER_TEMP/sodfa-release-build.log" "$RUNNER_TEMP/sodfa-keystore-info.txt" \
+            "$RUNNER_TEMP/sodfa-apk-signature.txt"
