@@ -53,6 +53,12 @@ tail -c 32 sodfa-update-public.der | base64 -w0 > sodfa-update-public-key.txt
 - Keep the private PEM file offline and backed up securely. Never upload it to GitHub as a file or artifact.
 - The release workflow derives the public key from the private key and refuses to proceed if the two do not match.
 
+## Validate a private source branch without production signing keys
+
+Open **Actions → SODFA Private Source Validation → Run workflow**, select the builder's `main` branch, enter the private source branch or commit in `source_ref`, and set `confirm_validation` to `true`.
+
+This workflow uses the read-only source token only for checkout. It does not receive the Android signing key, update-signing private key, or deployment SSH key. It suppresses private source logs, runs dependency install, analysis, tests, a debug build, and an obfuscated Release smoke build with a temporary disposable key. The protected environment approval is still required because the private source read token is used.
+
 ## Run a release build
 
 Open **Actions → SODFA Secure Android Release → Run workflow**, select `main`, and set `confirm_release` to `true`. The `sodfa-production` environment approval must also be completed. The signed APK is retained as the `sodfa-android-release` workflow artifact for 14 days.
