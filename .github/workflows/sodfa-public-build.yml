@@ -198,7 +198,6 @@ jobs:
           REMOTE_DIR="/var/www/mahmoudaljuorany.store/updates/sodfa"
           REMOTE_APK_TMP="$REMOTE_DIR/.$APK_NAME.uploading"
           REMOTE_MANIFEST_TMP="$REMOTE_DIR/.manifest.json.uploading"
-          SSH_OPTS="-i ~/.ssh/sodfa_deploy_key -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes"
           scp -i ~/.ssh/sodfa_deploy_key -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes "$APK" "$DEPLOY_USER@$DEPLOY_HOST:$REMOTE_APK_TMP"
           scp -i ~/.ssh/sodfa_deploy_key -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes manifest.json "$DEPLOY_USER@$DEPLOY_HOST:$REMOTE_MANIFEST_TMP"
           ssh -i ~/.ssh/sodfa_deploy_key -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes "$DEPLOY_USER@$DEPLOY_HOST" "set -e; mv '$REMOTE_APK_TMP' '$REMOTE_DIR/$APK_NAME'; mv '$REMOTE_MANIFEST_TMP' '$REMOTE_DIR/manifest.json'"
