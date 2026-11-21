@@ -177,6 +177,17 @@ jobs:
 
           python3 - <<'PY'
           import json, os
+          with open("docs/CHANGELOG.json", encoding="utf-8") as source:
+              changelog = json.load(source)
+          matching = [item for item in changelog.get("releases", [])
+                      if item.get("version") == os.environ["VERSION"]
+                      and int(item.get("build_number", -1)) == int(os.environ["BUILD_NUMBER"])]
+          if len(matching) != 1:
+              raise SystemExit("CHANGELOG.json must contain exactly one entry matching this release version and build number.")
+          release = matching[0]
+          changes = release.get("changes", [])
+          if not isinstance(changes, list) or not changes or not all(isinstance(item, str) and item.strip() for item in changes):
+              raise SystemExit("The matching changelog entry must contain a non-empty list of change descriptions.")
           manifest = {
               "application_id": "com.sodfa.sodfa",
               "platform": "android",
@@ -185,14 +196,17 @@ jobs:
               "build_number": int(os.environ["BUILD_NUMBER"]),
               "apk_url": os.environ["APK_URL"],
               "sha256": os.environ["APK_SHA256"],
-              "release_notes": "تحديث جديد لتطبيق صدفة",
+              "release_title": release.get("title", "تحديث جديد لصدفة"),
+              "release_changes": changes,
+              "release_notes": release.get("title", "تحديث جديد لتطبيق صدفة"),
+              "release_date": release.get("date", ""),
               "force_update": False,
               "min_supported_build": 1,
               "rollout_percentage": 100
           }
           with open("manifest.json", "w", encoding="utf-8") as f:
               json.dump(manifest, f, ensure_ascii=False, indent=2)
-              f.write("\n")
+              f.write("\\n")
           PY
 
           REMOTE_DIR="/var/www/mahmoudaljuorany.store/updates/sodfa"
