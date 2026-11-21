@@ -92,6 +92,13 @@ The workflow publishes:
 - `manifest.json`
 - `manifest.json.sig`
 
+Each matching `docs/CHANGELOG.json` release may optionally set:
+- `force_update`: boolean; when true, the client cannot dismiss the update dialog.
+- `min_supported_build`: integer from 1 through the release build number; installed clients below it are forced to update.
+- `rollout_percentage`: integer 0–100 for staged delivery; 100 is the default. Mandatory updates bypass the rollout percentage.
+
+The release job validates all three fields before signing the manifest. Defaults are `false`, `1`, and `100`; do not set a higher minimum or force update unless the new APK is ready to install.
+
 The signature file is base64-encoded Ed25519 over the exact UTF-8 bytes of `manifest.json`. The workflow publishes the signature before replacing the manifest, so a brief deployment transition fails closed.
 
 ## Private source repository note
