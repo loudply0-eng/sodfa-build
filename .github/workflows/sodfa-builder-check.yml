@@ -28,12 +28,94 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          for path in lib android ios web windows macos linux server; do
+          for path in lib android ios web windows macos linux server assets docs test integration_test; do
             if [ -e "$path" ]; then
-              echo "::error::Application source must remain in the private SODFA source repository, not this public builder."
+              echo "::error::Application source, tests, assets, and release documentation must remain in the private SODFA repository."
               exit 1
             fi
           done
+          for path in pubspec.yaml pubspec.lock analysis_options.yaml; do
+            if [ -e "$path" ]; then
+              echo "::error::Flutter project metadata must not be committed to the public build orchestrator."
+              exit 1
+            fi
+          done
+          if git ls-files | grep -E '(^|/)(pubspec\\.(yaml|lock)|analysis_options\\.yaml)$|\\.(dart|kt|kts|gradle)$|(^|/)gradlew$|gradle-wrapper\\.jar
+      - name: Check secure release workflow policy
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          from pathlib import Path
+
+          path = Path(".github/workflows/sodfa-secure-release.yml")
+          text = path.read_text(encoding="utf-8")
+          required = [
+              "workflow_dispatch:",
+              "github.ref == 'refs/heads/main'",
+              "inputs.confirm_release == true",
+              "loudply0-eng/sodfa-",
+              "SODFA_SOURCE_READ_TOKEN",
+              "persist-credentials: false",
+              "environment:",
+              "sodfa-production",
+              "--obfuscate",
+              "--split-debug-info=",
+              "SODFA_UPDATE_PRIVATE_KEY_PEM",
+              "SODFA_UPDATE_PUBLIC_KEY_BASE64",
+              "SODFA_DEPLOY_KNOWN_HOSTS",
+              "openssl pkeyutl -sign -rawin",
+              "manifest.json.sig",
+              "StrictHostKeyChecking=yes",
+              "cmp -s manifest.json",
+          ]
+          missing = [item for item in required if item not in text]
+          if missing:
+              raise SystemExit("Secure release policy check failed: " + ", ".join(missing))
+          if "pull_request:" in text or "push:" in text:
+              raise SystemExit("The private-source release workflow must not run on pull requests or pushes.")
+          if ("scp " in text or "ssh " in text) and not (
+              "openssl pkeyutl -sign -rawin" in text
+              and "SODFA_UPDATE_PRIVATE_KEY_PEM" in text
+              and "SODFA_DEPLOY_KNOWN_HOSTS" in text
+              and "StrictHostKeyChecking=yes" in text
+          ):
+              raise SystemExit("Server publishing requires a signed manifest and pinned SSH host keys.")
+          validation_path = Path(".github/workflows/sodfa-source-validation.yml")
+          validation_text = validation_path.read_text(encoding="utf-8")
+          validation_required = [
+              "SODFA_SOURCE_READ_TOKEN",
+              "persist-credentials: false",
+              "name: sodfa-validation",
+              "postgres:18-alpine",
+              "redis:8.0-alpine",
+              "npm audit --omit=dev --audit-level=high",
+              "npm run migrate",
+              "SODFA_API_INTEGRATION",
+              "npm test",
+              'JWT_SECRET="$(openssl rand -hex 32)"',
+          ]
+          missing_validation = [item for item in validation_required if item not in validation_text]
+          if missing_validation:
+              raise SystemExit("Private-source validation policy check failed: " + ", ".join(missing_validation))
+          if "name: sodfa-production" in validation_text:
+              raise SystemExit("Source validation must use the isolated sodfa-validation environment.")
+          forbidden_secrets = [
+              "ANDROID_KEYSTORE_BASE64",
+              "ANDROID_KEYSTORE_PASSWORD",
+              "SODFA_UPDATE_PRIVATE_KEY_PEM",
+              "SODFA_DEPLOY_SSH_KEY",
+              "SODFA_DEPLOY_HOST",
+          ]
+          exposed = [item for item in forbidden_secrets if item in validation_text]
+          if exposed:
+              raise SystemExit("Production secrets must not appear in source-validation workflow: " + ", ".join(exposed))
+          print("SODFA builder policy checks passed.")
+          PY
+; then
+            echo "::error::Flutter or Android application source was found in the public build orchestrator."
+            exit 1
+          fi
 
       - name: Check secure release workflow policy
         shell: bash
