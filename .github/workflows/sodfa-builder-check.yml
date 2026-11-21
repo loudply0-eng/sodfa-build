@@ -80,6 +80,7 @@ jobs:
           validation_required = [
               "SODFA_SOURCE_READ_TOKEN",
               "persist-credentials: false",
+              "name: sodfa-validation",
               "postgres:18-alpine",
               "redis:8.0-alpine",
               "npm audit --omit=dev --audit-level=high",
@@ -91,6 +92,8 @@ jobs:
           missing_validation = [item for item in validation_required if item not in validation_text]
           if missing_validation:
               raise SystemExit("Private-source validation policy check failed: " + ", ".join(missing_validation))
+          if "name: sodfa-production" in validation_text:
+              raise SystemExit("Source validation must use the isolated sodfa-validation environment.")
           forbidden_secrets = [
               "ANDROID_KEYSTORE_BASE64",
               "ANDROID_KEYSTORE_PASSWORD",
