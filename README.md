@@ -25,31 +25,31 @@ Create **two separate GitHub Environments** in this public repository. Do not pu
 1. Restrict deployment branches to `main` only.
 2. Add at least one required reviewer.
 3. Add only this **environment secret**:
-   - `SODFA_SOURCE_READ_TOKEN`: a fine-grained token scoped only to `loudply0-eng/sodfa-`, with **Contents: Read-only** permission.
+   - `SODFA_VALIDATION_SOURCE_READ_TOKEN`: a fine-grained token scoped only to `loudply0-eng/sodfa-`, with **Contents: Read-only** permission.
 
-This environment is used by the source-validation workflow to clone a selected private source ref and run tests. It must not contain Android signing keys, OTA signing keys, or server deployment keys.
+This environment is used by the source-validation workflow to clone a selected private source ref and run tests. It must not contain Android signing keys, OTA signing keys, or server deployment keys. Validation has no dependency or Gradle cache, so source branches cannot modify a cache used by production releases.
 
 ### `sodfa-production` — signed release and deployment
 
 1. Restrict deployment branches to `main` only.
 2. Add at least one required reviewer.
 3. Add these **environment secrets**:
-   - `SODFA_SOURCE_READ_TOKEN`: a separate fine-grained token scoped only to `loudply0-eng/sodfa-`, with **Contents: Read-only** permission.
-   - `ANDROID_KEYSTORE_BASE64`
-   - `ANDROID_KEYSTORE_PASSWORD`
-   - `ANDROID_KEY_ALIAS`
-   - `ANDROID_KEY_PASSWORD`
-   - `SODFA_UPDATE_PRIVATE_KEY_PEM`: the Ed25519 private signing key in PEM format.
-   - `SODFA_DEPLOY_HOST`
-   - `SODFA_DEPLOY_USER`
-   - `SODFA_DEPLOY_SSH_KEY`
-   - `SODFA_DEPLOY_KNOWN_HOSTS`: pre-verified known-hosts line(s) for the deployment server. Do not generate trust at deployment time with `ssh-keyscan`.
+   - `SODFA_PROD_SOURCE_READ_TOKEN`: a separate fine-grained token scoped only to `loudply0-eng/sodfa-`, with **Contents: Read-only** permission.
+   - `SODFA_PROD_ANDROID_KEYSTORE_BASE64`
+   - `SODFA_PROD_ANDROID_KEYSTORE_PASSWORD`
+   - `SODFA_PROD_ANDROID_KEY_ALIAS`
+   - `SODFA_PROD_ANDROID_KEY_PASSWORD`
+   - `SODFA_PROD_UPDATE_PRIVATE_KEY_PEM`: the Ed25519 private signing key in PEM format.
+   - `SODFA_PROD_DEPLOY_HOST`
+   - `SODFA_PROD_DEPLOY_USER`
+   - `SODFA_PROD_DEPLOY_SSH_KEY`
+   - `SODFA_PROD_DEPLOY_KNOWN_HOSTS`: pre-verified known-hosts line(s) for the deployment server. Do not generate trust at deployment time with `ssh-keyscan`.
 4. Add this **environment variable** (not secret):
-   - `SODFA_UPDATE_PUBLIC_KEY_BASE64`: Base64 encoding of the 32-byte raw Ed25519 public key paired with `SODFA_UPDATE_PRIVATE_KEY_PEM`.
+   - `SODFA_PROD_UPDATE_PUBLIC_KEY_BASE64`: Base64 encoding of the 32-byte raw Ed25519 public key paired with `SODFA_PROD_UPDATE_PRIVATE_KEY_PEM`.
 
-Use separate least-privilege read tokens for validation and production, and rotate them if either one is exposed. Never give either token write access.
+The `SODFA_VALIDATION_SOURCE_READ_TOKEN` and `SODFA_PROD_SOURCE_READ_TOKEN` must be separate least-privilege tokens. Never give either token write access.
 
-Never give the source token write access. Do not use a personal token with access to unrelated repositories. Never commit the Ed25519 private key or paste it into a workflow file.
+The `SODFA_PROD_` and `SODFA_VALIDATION_` prefixes are deliberate: the workflows no longer reference legacy unprefixed repository-secret names, preventing silent fallback to older repository-level secrets. Do not use a personal token with access to unrelated repositories. Never commit the Ed25519 private key or paste it into a workflow file.
 
 ## Generate the Ed25519 update-signing key pair
 
