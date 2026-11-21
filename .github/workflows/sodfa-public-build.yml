@@ -54,8 +54,36 @@ jobs:
           if-no-files-found: error
           retention-days: 7
 
+      - name: Prepare ephemeral signing key for PR release validation
+        if: github.event_name == 'pull_request'
+        run: |
+          set -euo pipefail
+          CI_KEYSTORE_PASSWORD="$(openssl rand -hex 24)"
+          keytool -genkeypair -noprompt -storetype JKS \
+            -keystore android/app/ci-release-smoke.jks \
+            -storepass "$CI_KEYSTORE_PASSWORD" \
+            -keypass "$CI_KEYSTORE_PASSWORD" \
+            -alias ci-release-smoke \
+            -keyalg RSA -keysize 2048 -validity 2 \
+            -dname "CN=SODFA CI smoke test"
+          cat > android/key.properties <<EOF
+          storeFile=ci-release-smoke.jks
+          storePassword=$CI_KEYSTORE_PASSWORD
+          keyAlias=ci-release-smoke
+          keyPassword=$CI_KEYSTORE_PASSWORD
+          EOF
+          chmod 600 android/key.properties android/app/ci-release-smoke.jks
+
+      - name: Build obfuscated release validation APK
+        if: github.event_name == 'pull_request'
+        env:
+          SODFA_UPDATE_MANIFEST_URL: https://mahmoudaljuorany.store/updates/sodfa/manifest.json
+        run: |
+          set -euo pipefail
+          flutter build apk --release --obfuscate --split-debug-info=build/sodfa-symbols --dart-define=SODFA_UPDATE_MANIFEST_URL="$SODFA_UPDATE_MANIFEST_URL"
+
       - name: Prepare release signing
-        if: github.event_name != 'pull_request'
+        if: github.event_name != 'pull_request' && github.ref == 'refs/heads/main'
         env:
           ANDROID_KEYSTORE_BASE64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
           ANDROID_KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
@@ -90,7 +118,7 @@ jobs:
           chmod 600 android/key.properties android/app/upload-keystore.jks
 
       - name: Build signed release APK
-        if: github.event_name != 'pull_request'
+        if: github.event_name != 'pull_request' && github.ref == 'refs/heads/main'
         env:
           SODFA_UPDATE_MANIFEST_URL: https://mahmoudaljuorany.store/updates/sodfa/manifest.json
           ANDROID_KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
@@ -118,14 +146,14 @@ jobs:
           fi
 
       - name: Verify release APK signature
-        if: github.event_name != 'pull_request'
+        if: github.event_name != 'pull_request' && github.ref == 'refs/heads/main'
         run: |
           APK=build/app/outputs/flutter-apk/app-release.apk
           APKSIGNER="$(find "$ANDROID_HOME/build-tools" -type f -name apksigner | sort -V | tail -1)"
           "$APKSIGNER" verify --verbose --print-certs "$APK"
 
       - name: Upload signed release APK
-        if: github.event_name != 'pull_request'
+        if: github.event_name != 'pull_request' && github.ref == 'refs/heads/main'
         uses: actions/upload-artifact@v4
         with:
           name: sodfa-android-release
@@ -242,3 +270,4 @@ jobs:
         run: |
           rm -f android/key.properties android/app/upload-keystore.jks
           rm -rf build/sodfa-symbols
+          rm -f android/app/ci-release-smoke.jks
