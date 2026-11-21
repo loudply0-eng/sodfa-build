@@ -198,7 +198,7 @@ jobs:
               "sha256": os.environ["APK_SHA256"],
               "release_title": release.get("title", "تحديث جديد لصدفة"),
               "release_changes": changes,
-              "release_notes": release.get("title", "تحديث جديد لتطبيق صدفة"),
+              "release_notes": release.get("title", "تحديث جديد لتطبيق صدفة") + chr(10) * 2 + chr(10).join("• " + item for item in changes),
               "release_date": release.get("date", ""),
               "force_update": False,
               "min_supported_build": 1,
