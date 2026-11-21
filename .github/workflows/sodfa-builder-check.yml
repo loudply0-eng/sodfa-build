@@ -86,7 +86,7 @@ jobs:
               "npm run migrate",
               "SODFA_API_INTEGRATION",
               "npm test",
-              "JWT_SECRET=\\"$(openssl rand -hex 32)\\"",
+              'JWT_SECRET="$(openssl rand -hex 32)"',
           ]
           missing_validation = [item for item in validation_required if item not in validation_text]
           if missing_validation:
