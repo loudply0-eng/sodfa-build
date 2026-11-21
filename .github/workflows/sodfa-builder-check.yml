@@ -134,11 +134,17 @@ jobs:
               raise SystemExit("Untrusted source validation must not read or write shared dependency caches.")
 
           forbidden_secrets = [
-              "ANDROID_KEYSTORE_BASE64",
-              "ANDROID_KEYSTORE_PASSWORD",
-              "SODFA_UPDATE_PRIVATE_KEY_PEM",
-              "SODFA_DEPLOY_SSH_KEY",
-              "SODFA_DEPLOY_HOST",
+              "SODFA_PROD_SOURCE_READ_TOKEN",
+              "SODFA_PROD_ANDROID_KEYSTORE_BASE64",
+              "SODFA_PROD_ANDROID_KEYSTORE_PASSWORD",
+              "SODFA_PROD_ANDROID_KEY_ALIAS",
+              "SODFA_PROD_ANDROID_KEY_PASSWORD",
+              "SODFA_PROD_UPDATE_PRIVATE_KEY_PEM",
+              "SODFA_PROD_UPDATE_PUBLIC_KEY_BASE64",
+              "SODFA_PROD_DEPLOY_HOST",
+              "SODFA_PROD_DEPLOY_USER",
+              "SODFA_PROD_DEPLOY_SSH_KEY",
+              "SODFA_PROD_DEPLOY_KNOWN_HOSTS",
           ]
           exposed = [item for item in forbidden_secrets if item in validation_text]
           if exposed:
