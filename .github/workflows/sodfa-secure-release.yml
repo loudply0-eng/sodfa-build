@@ -373,6 +373,7 @@ jobs:
             exit 1
           fi
           APK_NAME="sodfa-$VERSION_LINE.apk"
+          BUILD_NUMBER="${VERSION_LINE##*+}"
           APK="build/app/outputs/flutter-apk/app-release.apk"
           test -s "$APK"
           APK_SHA256="$(sha256sum "$APK" | awk '{print $1}')"
@@ -423,6 +424,20 @@ jobs:
              trap \"rm -f '$REMOTE_APK_TMP' '$REMOTE_SIG_TMP' '$REMOTE_MANIFEST_TMP'\" EXIT; \
              UPLOADED_SHA=\$(sha256sum '$REMOTE_APK_TMP' | awk '{print \$1}'); \
              test \"\$UPLOADED_SHA\" = '$APK_SHA256'; \
+             if [ -s '$REMOTE_DIR/manifest.json' ]; then \
+               CURRENT_BUILD=$(python3 -c 'import json,sys; print(int(json.load(open(sys.argv[1]))["build_number"]))' '$REMOTE_DIR/manifest.json'); \
+               if [ "$CURRENT_BUILD" -gt '$BUILD_NUMBER' ]; then \
+                 echo 'Refusing to publish an older build over a newer release.' >&2; \
+                 exit 1; \
+               fi; \
+               if [ "$CURRENT_BUILD" -eq '$BUILD_NUMBER' ]; then \
+                 test -s '$REMOTE_DIR/$APK_NAME'; \
+                 CURRENT_APK_SHA=$(sha256sum '$REMOTE_DIR/$APK_NAME' | awk '{print $1}'); \
+                 test "$CURRENT_APK_SHA" = '$APK_SHA256'; \
+                 cmp -s '$REMOTE_DIR/manifest.json' '$REMOTE_MANIFEST_TMP'; \
+                 cmp -s '$REMOTE_DIR/manifest.json.sig' '$REMOTE_SIG_TMP'; \
+               fi; \
+             fi; \
              if [ -e '$REMOTE_DIR/$APK_NAME' ]; then \
                EXISTING_SHA=\$(sha256sum '$REMOTE_DIR/$APK_NAME' | awk '{print \$1}'); \
                if [ \"\$EXISTING_SHA\" != '$APK_SHA256' ]; then \
