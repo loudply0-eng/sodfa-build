@@ -89,12 +89,8 @@ jobs:
               "manifest.json.sig",
               "StrictHostKeyChecking=yes",
               "cmp -s manifest.json",
-              "UPLOADED_SHA=",
-              "sha256sum '$REMOTE_APK_TMP'",
-              "CURRENT_BUILD=",
-              "Refusing to publish an older build over a newer release.",
-              "cmp -s '$REMOTE_DIR/manifest.json' '$REMOTE_MANIFEST_TMP'",
-              "Refusing to replace a published build number with different APK bytes.",
+              "sodfa-remote-publish.sh",
+              "bash -s -- '$REMOTE_DIR' '$APK_NAME' '$APK_SHA256' '$BUILD_NUMBER'",
               "npm audit --omit=dev --audit-level=high",
               "postgres:18-alpine",
               "redis:8.0-alpine",
@@ -105,6 +101,33 @@ jobs:
           missing = [item for item in release_required if item not in release_text]
           if missing:
               raise SystemExit("Secure release policy check failed: " + ", ".join(missing))
+          publish_path = Path("scripts/sodfa-remote-publish.sh")
+          publish_text = publish_path.read_text(encoding="utf-8")
+          publish_required = [
+              "UPLOADED_SHA=",
+              "CURRENT_BUILD=",
+              "Refusing to publish an older build over a newer release.",
+              "Refusing to replace an existing build number with different release bytes.",
+              "cmp -s",
+              "sha256sum",
+              "trap 'rm -f --",
+          ]
+          missing_publish = [item for item in publish_required if item not in publish_text]
+          if missing_publish:
+              raise SystemExit("Remote publication guard policy check failed: " + ", ".join(missing_publish))
+
+          test_path = Path("scripts/test-sodfa-remote-publish.sh")
+          test_text = test_path.read_text(encoding="utf-8")
+          test_required = [
+              "idempotently accept the exact same build",
+              "Reject the same build number when APK bytes differ",
+              "Reject the same APK/build when the manifest/signature differ",
+              "reject an older release attempting rollback",
+          ]
+          missing_tests = [item for item in test_required if item not in test_text]
+          if missing_tests:
+              raise SystemExit("Remote publication regression-test coverage is incomplete: " + ", ".join(missing_tests))
+
           if "pull_request:" in release_text or "push:" in release_text:
               raise SystemExit("The private-source release workflow must not run on pull requests or pushes.")
           if ("scp " in release_text or "ssh " in release_text) and not (
