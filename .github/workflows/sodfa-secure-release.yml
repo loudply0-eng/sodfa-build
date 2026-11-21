@@ -310,6 +310,18 @@ jobs:
           changes = release.get("changes")
           if not isinstance(changes, list) or not changes or not all(isinstance(x, str) and x.strip() for x in changes):
               raise SystemExit("The matching changelog entry must contain a non-empty list of changes.")
+
+          force_update = release.get("force_update", False)
+          minimum_build = release.get("min_supported_build", 1)
+          rollout_percentage = release.get("rollout_percentage", 100)
+          release_build = int(os.environ["BUILD_NUMBER"])
+          if not isinstance(force_update, bool):
+              raise SystemExit("force_update in CHANGELOG.json must be a boolean.")
+          if isinstance(minimum_build, bool) or not isinstance(minimum_build, int) or not 1 <= minimum_build <= release_build:
+              raise SystemExit("min_supported_build must be an integer between 1 and the release build number.")
+          if isinstance(rollout_percentage, bool) or not isinstance(rollout_percentage, int) or not 0 <= rollout_percentage <= 100:
+              raise SystemExit("rollout_percentage must be an integer between 0 and 100.")
+
           manifest = {
               "application_id": "com.sodfa.sodfa",
               "platform": "android",
@@ -322,9 +334,9 @@ jobs:
               "release_changes": changes,
               "release_notes": release.get("title", "تحديث جديد لتطبيق صدفة") + chr(10) * 2 + chr(10).join("• " + item for item in changes),
               "release_date": release.get("date", ""),
-              "force_update": False,
-              "min_supported_build": 1,
-              "rollout_percentage": 100
+              "force_update": force_update,
+              "min_supported_build": minimum_build,
+              "rollout_percentage": rollout_percentage
           }
           Path("manifest.json").write_text(
               json.dumps(manifest, ensure_ascii=False, separators=(",", ":")) + "\n",
