@@ -126,10 +126,10 @@ jobs:
           missing = [item for item in required if item not in text]
           if missing:
               raise SystemExit("Private release dispatcher policy check failed: " + ", ".join(missing))
-          forbidden = ["SODFA_PROD_ANDROID", "SODFA_PROD_UPDATE_PRIVATE_KEY", "SODFA_PROD_DEPLOY_SSH_KEY", "SODFA_PROD_SOURCE_READ_TOKEN"]
-          exposed = [item for item in forbidden if item in text]
+          import re
+          exposed = re.findall(r"(?:secrets|vars)\\.SODFA_(?!VALIDATION_)[A-Z0-9_]+", text)
           if exposed:
-              raise SystemExit("Private dispatcher must never receive production signing/deployment secrets: " + ", ".join(exposed))
+              raise SystemExit("Private dispatcher must never reference production signing/deployment secrets: " + ", ".join(sorted(set(exposed))))
           if "pull_request:" in text or "workflow_dispatch:" in text:
               raise SystemExit("Automatic release dispatch must only run on trusted private main pushes.")
           print("Private automatic release dispatcher policy checks passed.")
