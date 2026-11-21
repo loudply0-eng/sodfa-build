@@ -68,11 +68,11 @@ jobs:
         shell: bash
         env:
           SOURCE_REF: ${{ inputs.source_ref }}
-          SOURCE_TOKEN: ${{ secrets.SODFA_SOURCE_READ_TOKEN }}
+          SOURCE_TOKEN: ${{ secrets.SODFA_VALIDATION_SOURCE_READ_TOKEN }}
         run: |
           set -euo pipefail
           if [ -z "$SOURCE_TOKEN" ]; then
-            echo "::error::SODFA_SOURCE_READ_TOKEN is missing from the protected environment."
+            echo "::error::SODFA_VALIDATION_SOURCE_READ_TOKEN is missing from the protected environment."
             exit 1
           fi
           if ! [[ "$SOURCE_REF" =~ ^[A-Za-z0-9._/-]{1,120}$ ]] || [[ "$SOURCE_REF" == *".."* ]]; then
@@ -85,7 +85,7 @@ jobs:
         with:
           repository: loudply0-eng/sodfa-
           ref: ${{ inputs.source_ref }}
-          token: ${{ secrets.SODFA_SOURCE_READ_TOKEN }}
+          token: ${{ secrets.SODFA_VALIDATION_SOURCE_READ_TOKEN }}
           path: source
           fetch-depth: 1
           persist-credentials: false
