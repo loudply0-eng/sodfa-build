@@ -170,10 +170,27 @@ jobs:
           export VERSION BUILD_NUMBER APK_URL APK_SHA256
 
           install -m 700 -d ~/.ssh
-          # Accept either a normal multiline PEM secret or a literal \\n-escaped secret.
-          printf '%s' "$DEPLOY_SSH_KEY" | sed 's/\\n/\n/g' | tr -d '\r' > ~/.ssh/sodfa_deploy_key
+          # Normalize common GitHub-secret formats: multiline PEM, escaped newlines, or base64 PEM.
+          python3 - <<'PY'
+          import base64, os
+          raw = os.environ["DEPLOY_SSH_KEY"].strip()
+          if len(raw) >= 2 and raw[0] == raw[-1] and raw[0] in ("'", '"'):
+              raw = raw[1:-1]
+          raw = raw.replace("\\r\\n", "\n").replace("\\n", "\n").replace("\\r", "\n").replace("\r", "")
+          if "-----BEGIN " not in raw:
+              try:
+                  decoded = base64.b64decode("".join(raw.split()), validate=True).decode("utf-8")
+                  if "-----BEGIN " in decoded:
+                      raw = decoded
+              except Exception:
+                  pass
+          if "-----BEGIN " not in raw or "PRIVATE KEY-----" not in raw:
+              raise SystemExit("DEPLOY_SSH_KEY is not a recognized PEM private key; store the private key as multiline PEM or base64-encoded PEM.")
+          with open(os.path.expanduser("~/.ssh/sodfa_deploy_key"), "w", encoding="utf-8", newline="\\n") as key:
+              key.write(raw.rstrip() + "\\n")
+          PY
           chmod 600 ~/.ssh/sodfa_deploy_key
-          # Fail early with a clear message if the configured private key is malformed.
+          # Validate the decoded private key before attempting network access.
           ssh-keygen -y -f ~/.ssh/sodfa_deploy_key > ~/.ssh/sodfa_deploy_key.pub
           ssh-keygen -lf ~/.ssh/sodfa_deploy_key.pub
           printf '%s\n' "$DEPLOY_KNOWN_HOSTS" | tr -d '\r' > ~/.ssh/known_hosts
