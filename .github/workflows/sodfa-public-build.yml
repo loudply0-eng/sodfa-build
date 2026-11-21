@@ -170,9 +170,13 @@ jobs:
           export VERSION BUILD_NUMBER APK_URL APK_SHA256
 
           install -m 700 -d ~/.ssh
-          printf '%s\n' "$DEPLOY_SSH_KEY" > ~/.ssh/sodfa_deploy_key
+          # Accept either a normal multiline PEM secret or a literal \\n-escaped secret.
+          printf '%s' "$DEPLOY_SSH_KEY" | sed 's/\\\\n/\n/g' | tr -d '\r' > ~/.ssh/sodfa_deploy_key
           chmod 600 ~/.ssh/sodfa_deploy_key
-          printf '%s\n' "$DEPLOY_KNOWN_HOSTS" > ~/.ssh/known_hosts
+          # Fail early with a clear message if the configured private key is malformed.
+          ssh-keygen -y -f ~/.ssh/sodfa_deploy_key > ~/.ssh/sodfa_deploy_key.pub
+          ssh-keygen -lf ~/.ssh/sodfa_deploy_key.pub
+          printf '%s\n' "$DEPLOY_KNOWN_HOSTS" | tr -d '\r' > ~/.ssh/known_hosts
           chmod 600 ~/.ssh/known_hosts
 
           python3 - <<'PY'
