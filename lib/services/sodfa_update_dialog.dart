@@ -89,12 +89,27 @@ class _SodfaUpdateDialogState extends State<SodfaUpdateDialog> {
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text('الإصدار ${widget.release.version} متوفر الآن'),
-                if (widget.release.releaseNotes.isNotEmpty) ...[
+                if (widget.release.releaseTitle.isNotEmpty || widget.release.releaseChanges.isNotEmpty || widget.release.releaseNotes.isNotEmpty) ...[
                   const SizedBox(height: 12),
-                  const Text('شنو الجديد؟',
-                      style: TextStyle(fontWeight: FontWeight.bold)),
-                  const SizedBox(height: 5),
-                  Text(widget.release.releaseNotes),
+                  Text(
+                    widget.release.releaseTitle.isNotEmpty ? widget.release.releaseTitle : 'شنو الجديد؟',
+                    style: const TextStyle(fontWeight: FontWeight.bold),
+                  ),
+                  const SizedBox(height: 7),
+                  if (widget.release.releaseChanges.isNotEmpty)
+                    ...widget.release.releaseChanges.map((change) => Padding(
+                      padding: const EdgeInsets.only(bottom: 7),
+                      child: Row(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          const Icon(Icons.check_circle_outline_rounded, size: 18, color: Color(0xFF9185FF)),
+                          const SizedBox(width: 7),
+                          Expanded(child: Text(change, style: const TextStyle(height: 1.45))),
+                        ],
+                      ),
+                    ))
+                  else
+                    Text(widget.release.releaseNotes),
                 ],
                 if (downloading) ...[
                   const SizedBox(height: 18),
