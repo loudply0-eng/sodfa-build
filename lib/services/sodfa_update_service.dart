@@ -12,13 +12,15 @@ const _manifestUrl = String.fromEnvironment(
 );
 
 class SodfaRelease {
-  const SodfaRelease({required this.version,required this.buildNumber,required this.apkUrl,required this.sha256,required this.releaseNotes,required this.forceUpdate,required this.minSupportedBuild});
-  final String version; final int buildNumber; final Uri apkUrl; final String sha256; final String releaseNotes; final bool forceUpdate; final int minSupportedBuild;
+  const SodfaRelease({required this.version,required this.buildNumber,required this.apkUrl,required this.sha256,required this.releaseNotes,required this.releaseTitle,required this.releaseChanges,required this.forceUpdate,required this.minSupportedBuild});
+  final String version; final int buildNumber; final Uri apkUrl; final String sha256; final String releaseNotes; final String releaseTitle; final List<String> releaseChanges; final bool forceUpdate; final int minSupportedBuild;
   factory SodfaRelease.fromJson(Map<String,dynamic> json) {
     final apkUrl=Uri.parse(json['apk_url'] as String);
     final digest=(json['sha256'] as String).toLowerCase();
     if(apkUrl.scheme!='https'||digest.length!=64||!RegExp(r'^[a-f0-9]{64}$').hasMatch(digest)) throw const FormatException('Invalid update URL or SHA-256 digest.');
-    return SodfaRelease(version:json['version'] as String,buildNumber:(json['build_number'] as num).toInt(),apkUrl:apkUrl,sha256:digest,releaseNotes:(json['release_notes'] as String?)??'',forceUpdate:(json['force_update'] as bool?)??false,minSupportedBuild:(json['min_supported_build'] as num?)?.toInt()??0);
+    final rawChanges=json['release_changes'];
+    final changes=rawChanges is List ? rawChanges.map((item)=>item.toString()).where((item)=>item.trim().isNotEmpty).toList(growable:false) : const <String>[];
+    return SodfaRelease(version:json['version'] as String,buildNumber:(json['build_number'] as num).toInt(),apkUrl:apkUrl,sha256:digest,releaseNotes:(json['release_notes'] as String?)??'',releaseTitle:(json['release_title'] as String?)??'',releaseChanges:changes,forceUpdate:(json['force_update'] as bool?)??false,minSupportedBuild:(json['min_supported_build'] as num?)?.toInt()??0);
   }
 }
 
