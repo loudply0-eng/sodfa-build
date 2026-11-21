@@ -53,3 +53,86 @@ jobs:
           path: build/app/outputs/flutter-apk/app-debug.apk
           if-no-files-found: error
           retention-days: 7
+
+      - name: Prepare release signing
+        if: github.event_name != 'pull_request'
+        env:
+          ANDROID_KEYSTORE_BASE64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
+          ANDROID_KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+          ANDROID_KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
+          ANDROID_KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
+        run: |
+          set -euo pipefail
+          for name in ANDROID_KEYSTORE_BASE64 ANDROID_KEYSTORE_PASSWORD ANDROID_KEY_ALIAS ANDROID_KEY_PASSWORD; do
+            if [ -z "${!name:-}" ]; then
+              echo "::error title=Missing signing secret::$name is not configured in the public build repository."
+              exit 1
+            fi
+          done
+          printf '%s' "$ANDROID_KEYSTORE_BASE64" | tr -d '[:space:]' | base64 --decode > android/app/upload-keystore.jks
+          if [ ! -s android/app/upload-keystore.jks ]; then
+            echo "::error::The decoded Android keystore is empty or invalid."
+            exit 1
+          fi
+          keytool -list -v -keystore android/app/upload-keystore.jks -alias "$ANDROID_KEY_ALIAS" -storepass "$ANDROID_KEYSTORE_PASSWORD" > /tmp/sodfa-keystore-info.txt
+          ACTUAL_CERT="$(awk -F': ' '/SHA256:/{gsub(/:/,"",$2); print tolower($2); exit}' /tmp/sodfa-keystore-info.txt)"
+          EXPECTED_CERT="369c770895b6f20830f5aa5891e0146623c92391c8589f73542cdd7fbe559ee2"
+          if [ "$ACTUAL_CERT" != "$EXPECTED_CERT" ]; then
+            echo "::error title=Wrong signing key::The keystore certificate does not match the registered SODFA release key."
+            exit 1
+          fi
+          cat > android/key.properties <<EOF
+          storeFile=upload-keystore.jks
+          storePassword=$ANDROID_KEYSTORE_PASSWORD
+          keyAlias=$ANDROID_KEY_ALIAS
+          keyPassword=$ANDROID_KEY_PASSWORD
+          EOF
+          chmod 600 android/key.properties android/app/upload-keystore.jks
+
+      - name: Build signed release APK
+        if: github.event_name != 'pull_request'
+        env:
+          SODFA_UPDATE_MANIFEST_URL: https://mahmoudaljuorany.store/updates/sodfa/manifest.json
+          ANDROID_KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+          ANDROID_KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
+        run: |
+          set -euo pipefail
+          set +e
+          flutter build apk --release --dart-define=SODFA_UPDATE_MANIFEST_URL="$SODFA_UPDATE_MANIFEST_URL" 2>&1 | tee /tmp/sodfa-build-first.log
+          BUILD_STATUS=${PIPESTATUS[0]}
+          set -e
+          if [ "$BUILD_STATUS" -ne 0 ]; then
+            if grep -q "Cannot recover key" /tmp/sodfa-build-first.log; then
+              echo "Retrying with the verified keystore password for the private key."
+              cat > android/key.properties <<EOF
+          storeFile=upload-keystore.jks
+          storePassword=$ANDROID_KEYSTORE_PASSWORD
+          keyAlias=$ANDROID_KEY_ALIAS
+          keyPassword=$ANDROID_KEYSTORE_PASSWORD
+          EOF
+              chmod 600 android/key.properties
+              flutter build apk --release --dart-define=SODFA_UPDATE_MANIFEST_URL="$SODFA_UPDATE_MANIFEST_URL"
+            else
+              exit "$BUILD_STATUS"
+            fi
+          fi
+
+      - name: Verify release APK signature
+        if: github.event_name != 'pull_request'
+        run: |
+          APK=build/app/outputs/flutter-apk/app-release.apk
+          APKSIGNER="$(find "$ANDROID_HOME/build-tools" -type f -name apksigner | sort -V | tail -1)"
+          "$APKSIGNER" verify --verbose --print-certs "$APK"
+
+      - name: Upload signed release APK
+        if: github.event_name != 'pull_request'
+        uses: actions/upload-artifact@v4
+        with:
+          name: sodfa-android-release
+          path: build/app/outputs/flutter-apk/app-release.apk
+          if-no-files-found: error
+          retention-days: 14
+
+      - name: Remove signing files
+        if: always()
+        run: rm -f android/key.properties android/app/upload-keystore.jks
