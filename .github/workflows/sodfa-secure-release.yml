@@ -410,6 +410,7 @@ jobs:
           ssh -i ~/.ssh/sodfa_deploy_key -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes \
             "$DEPLOY_USER@$DEPLOY_HOST" \
             "set -euo pipefail; \
+             trap \"rm -f '$REMOTE_APK_TMP' '$REMOTE_SIG_TMP' '$REMOTE_MANIFEST_TMP'\" EXIT; \
              UPLOADED_SHA=\$(sha256sum '$REMOTE_APK_TMP' | awk '{print \$1}'); \
              test \"\$UPLOADED_SHA\" = '$APK_SHA256'; \
              if [ -e '$REMOTE_DIR/$APK_NAME' ]; then \
