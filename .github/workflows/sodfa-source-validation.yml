@@ -32,7 +32,6 @@ jobs:
       NODE_ENV: test
       DATABASE_URL: postgres://sodfa:sodfa_ci_only@127.0.0.1:5432/sodfa
       REDIS_URL: redis://127.0.0.1:6379
-      JWT_SECRET: ci-only-secret-not-used-outside-this-ephemeral-test-environment
       JWT_ISSUER: https://api.sodfa.test
       JWT_AUDIENCE: sodfa-test
       SMTP_HOST: 127.0.0.1
@@ -125,7 +124,7 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          if ! npm run migrate > "$RUNNER_TEMP/sodfa-api-migrate.log" 2>&1; then
+          if ! JWT_SECRET="$(openssl rand -hex 32)" npm run migrate > "$RUNNER_TEMP/sodfa-api-migrate.log" 2>&1; then
             echo "::error::Private API database migrations failed; private logs are suppressed."
             exit 1
           fi
@@ -136,7 +135,7 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          if ! npm test > "$RUNNER_TEMP/sodfa-api-tests.log" 2>&1; then
+          if ! JWT_SECRET="$(openssl rand -hex 32)" npm test > "$RUNNER_TEMP/sodfa-api-tests.log" 2>&1; then
             echo "::error::API unit or PostgreSQL/Redis integration tests failed; private logs are suppressed."
             exit 1
           fi
