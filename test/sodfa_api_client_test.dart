@@ -225,16 +225,16 @@ void main() {
       ),
       throwsA(isA<ArgumentError>()),
     );
-    await expectLater(
-      client.createDirectConversation('not-a-uuid'),
+    expect(
+      () => client.createDirectConversation('not-a-uuid'),
       throwsA(isA<ArgumentError>()),
     );
-    await expectLater(
-      client.reportUser(userId: 'not-a-uuid', category: 'spam'),
+    expect(
+      () => client.reportUser(userId: 'not-a-uuid', category: 'spam'),
       throwsA(isA<ArgumentError>()),
     );
-    await expectLater(
-      client.reportUser(
+    expect(
+      () => client.reportUser(
         userId: '123e4567-e89b-42d3-a456-426614174000',
         category: 'made_up_category',
       ),
