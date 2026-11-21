@@ -206,7 +206,7 @@ jobs:
           }
           with open("manifest.json", "w", encoding="utf-8") as f:
               json.dump(manifest, f, ensure_ascii=False, indent=2)
-              f.write("\\n")
+              f.write("\n")
           PY
 
           REMOTE_DIR="/var/www/mahmoudaljuorany.store/updates/sodfa"
