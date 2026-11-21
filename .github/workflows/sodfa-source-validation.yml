@@ -27,7 +27,7 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 75
     environment:
-      name: sodfa-production
+      name: sodfa-validation
     env:
       NODE_ENV: test
       DATABASE_URL: postgres://sodfa:sodfa_ci_only@127.0.0.1:5432/sodfa
