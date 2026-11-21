@@ -253,7 +253,7 @@ jobs:
           if ! flutter build apk --release --obfuscate \
             --split-debug-info="$RUNNER_TEMP/sodfa-symbols" \
             --dart-define=SODFA_UPDATE_MANIFEST_URL="$SODFA_UPDATE_MANIFEST_URL" \
-            --dart-define=SODFA_PROD_UPDATE_PUBLIC_KEY_BASE64="$SODFA_PROD_UPDATE_PUBLIC_KEY_BASE64" \
+            --dart-define=SODFA_UPDATE_PUBLIC_KEY_BASE64="$SODFA_PROD_UPDATE_PUBLIC_KEY_BASE64" \
             > "$RUNNER_TEMP/sodfa-release-build.log" 2>&1; then
             echo "::error::The signed release build failed. Private source build logs were intentionally not published."
             exit 1
