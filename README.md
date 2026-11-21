@@ -63,8 +63,8 @@ openssl pkey -pubin -in sodfa-update-public.pem -outform DER -out sodfa-update-p
 tail -c 32 sodfa-update-public.der | base64 -w0 > sodfa-update-public-key.txt
 ```
 
-- Put the PEM private-key file contents into the `SODFA_UPDATE_PRIVATE_KEY_PEM` environment secret.
-- Put the contents of `sodfa-update-public-key.txt` into the `SODFA_UPDATE_PUBLIC_KEY_BASE64` environment variable.
+- Put the PEM private-key file contents into the `SODFA_PROD_UPDATE_PRIVATE_KEY_PEM` environment secret.
+- Put the contents of `sodfa-update-public-key.txt` into the `SODFA_PROD_UPDATE_PUBLIC_KEY_BASE64` environment variable.
 - Keep the private PEM file offline and backed up securely. Never upload it to GitHub as a file or artifact.
 - The release workflow derives the public key from the private key and refuses to proceed if the two do not match.
 
@@ -84,6 +84,10 @@ The workflow publishes:
 - `manifest.json.sig`
 
 The signature file is base64-encoded Ed25519 over the exact UTF-8 bytes of `manifest.json`. The workflow publishes the signature before replacing the manifest, so a brief deployment transition fails closed.
+
+## Private source repository note
+
+The private `loudply0-eng/sodfa-` repository remains private on the GitHub Free-compatible configuration. GitHub Free does not provide Environments or environment secrets for private repositories. Its three manual Oracle workflows therefore use only the uniquely named private repository secrets `SODFA_PROD_ORACLE_SSH_KEY` and `SODFA_PROD_ORACLE_KNOWN_HOSTS`, require `main` plus explicit confirmation, and do not run on push or pull request. Do not add legacy unprefixed repository secret names.
 
 ## Public-source history limitation
 
