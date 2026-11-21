@@ -11,7 +11,7 @@ This repository is a **public build orchestrator only**. The Flutter application
 - The private source dispatch pins the production build to the exact pushed 40-character source commit SHA, so queued builds cannot silently pick up a newer source revision.
 - Automatic dispatch does not bypass the protected `sodfa-production` environment approval; a required reviewer must approve before any production signing/deployment secret is exposed.
 - A protected GitHub Environment approval is required before production secrets are exposed to the release job.
-- The workflow checks out only the private source repository's `main` branch using a fine-grained read-only token.
+- The automatic production workflow checks out the exact private-source commit SHA delivered by the main-branch dispatcher; the protected manual recovery path can use `main` or a full commit SHA. Both use a fine-grained read-only source token.
 - The workflow runs the private API dependency audit, PostgreSQL/Redis migrations and integration tests, then `flutter pub get`, `flutter analyze`, and `flutter test`; it builds an obfuscated APK, verifies the Android signing certificate, signs the update manifest with Ed25519, and publishes the APK plus manifest and detached signature.
 - Private source build logs, Android signing files, update signing keys, and Dart obfuscation symbols are not uploaded as artifacts.
 - The deployment verifies the APK SHA-256, application ID, platform, channel, manifest version and build number on the Oracle server before publishing. A stale build cannot overwrite a newer manifest; retries of the exact same build are idempotent, while different APK/manifest/signature bytes under the same build number are rejected.
