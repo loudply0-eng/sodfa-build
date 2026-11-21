@@ -1,3 +1,7 @@
-# SODFA Build
+# صدفة | SODFA
 
-Public build mirror for the SODFA Flutter Android application. This repository contains app source and CI build workflows only. Production deployment credentials and private infrastructure configuration are intentionally excluded.
+نسخة عامة مخصصة لفحص وبناء تطبيق صدفة Flutter. المستودع الأصلي يبقى خاصاً. يحتوي هذا المستودع كود تطبيق Android والاختبارات وسير عمل البناء فقط؛ لا يحتوي مفاتيح التوقيع أو أسرار النشر أو كود خادم الإنتاج.
+
+## البناء
+
+يشغّل GitHub Actions فحوص Flutter والاختبارات ثم يبني APK تجريبياً ويرفعه كملف artifact. هذا الإصدار التجريبي يستخدم توقيع Debug، لذلك يصلح للتثبيت والاختبار، وليس كتحديث فوق نسخة إنتاج موقعة بمفتاح مختلف.
