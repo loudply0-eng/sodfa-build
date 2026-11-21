@@ -124,6 +124,38 @@
 
 النشر لا يثبت التحديث بصمت: Android يعرض مُثبّت الحزمة ويطلب تأكيد المستخدم.
 
+## سادساً: حماية فرع main من التغيير المباشر
+
+هذه الخطوة مهمة حتى لا يرجع كود التطبيق إلى المستودع العام أو يعمل سير النشر القديم بالخطأ.
+
+في كل مستودع افتح:
+
+**Settings → Branches → Add branch protection rule**
+
+واجعل Branch name pattern هو `main`.
+
+### في المستودع العام `sodfa-build`
+
+- فعّل Require a pull request before merging.
+- فعّل Require status checks to pass before merging، واختر فحص `policy` الذي ينفذه `SODFA Builder Security Checks`.
+- فعّل Require branches to be up to date before merging.
+- فعّل Require conversation resolution before merging.
+- امنع Force pushes.
+- امنع Deletions.
+- لا تسمح بإدخال تغييرات على `main` مباشرةً.
+
+### في المستودع الخاص `sodfa-`
+
+- فعّل Require a pull request before merging.
+- فعّل Require conversation resolution before merging.
+- امنع Force pushes.
+- امنع Deletions.
+- لا تدمج تحديثاً قبل نجاح **SODFA Private Source Validation** من المستودع العام على نفس Source commit.
+
+إذا ما عندك مراجع ثانٍ موثوق، لا تفعّل شرط موافقة شخص آخر يسبب قفل دمج التحديثات عليك. خَلِّ شرط الـPR وفحوصات البناء والحماية فعالاً، وأضف مراجعة ثانية عند توفر شخص موثوق.
+
+ملاحظة: لا أستطيع من اتصال GitHub الحالي قراءة أو تعديل Branch protection؛ اضبطها من إعدادات GitHub نفسها. بعد ذلك تحقّق أن القاعدة تظهر مفعّلة على `main`.
+
 ## ملاحظات أمان أخيرة
 
 - لا تشغّل مسارات النشر القديمة الموجودة حالياً في `main` قبل دمج مساري الحماية.
