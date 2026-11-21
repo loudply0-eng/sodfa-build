@@ -19,6 +19,10 @@ This repository is a **public build orchestrator only**. The Flutter application
 - Every external GitHub Action used by this public builder is pinned to a full commit SHA and checked by CI.
 - The app verifies the detached Ed25519 signature on the exact manifest bytes before parsing update metadata. It also enforces HTTPS, same-origin APK hosting under `/updates/sodfa/`, and SHA-256 verification.
 
+## Arabic setup instructions
+
+For a step-by-step Arabic checklist of all GitHub environments, secrets, read-only tokens, Oracle values, validation, and protected deployment, see [SETUP-AR.md](SETUP-AR.md).
+
 ## Required GitHub configuration
 
 Create **two separate GitHub Environments** in this public repository. Do not put the source-read token in the production environment, and do not put release/deploy secrets in the validation environment.
