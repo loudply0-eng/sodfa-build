@@ -25,9 +25,44 @@ jobs:
   validate:
     if: github.ref == 'refs/heads/main' && inputs.confirm_validation == true
     runs-on: ubuntu-latest
-    timeout-minutes: 60
+    timeout-minutes: 75
     environment:
       name: sodfa-production
+    env:
+      NODE_ENV: test
+      DATABASE_URL: postgres://sodfa:sodfa_ci_only@127.0.0.1:5432/sodfa
+      REDIS_URL: redis://127.0.0.1:6379
+      JWT_SECRET: ci-only-secret-not-used-outside-this-ephemeral-test-environment
+      JWT_ISSUER: https://api.sodfa.test
+      JWT_AUDIENCE: sodfa-test
+      SMTP_HOST: 127.0.0.1
+      SMTP_PORT: 1025
+      SMTP_SECURE: 'false'
+      SMTP_FROM: '"SODFA" <no-reply@sodfa.test>'
+      SODFA_API_INTEGRATION: '1'
+    services:
+      postgres:
+        image: postgres:18-alpine
+        env:
+          POSTGRES_DB: sodfa
+          POSTGRES_USER: sodfa
+          POSTGRES_PASSWORD: sodfa_ci_only
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U sodfa -d sodfa"
+          --health-interval 5s
+          --health-timeout 3s
+          --health-retries 20
+      redis:
+        image: redis:8.0-alpine
+        ports:
+          - 6379:6379
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 5s
+          --health-timeout 3s
+          --health-retries 20
 
     steps:
       - name: Validate source ref and read-only token
@@ -55,6 +90,57 @@ jobs:
           path: source
           fetch-depth: 1
           persist-credentials: false
+
+      - name: Set up Node.js 26
+        uses: actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e
+        with:
+          node-version: "26"
+          cache: npm
+          cache-dependency-path: source/server/api/package.json
+
+      - name: Install private API dependencies
+        working-directory: source/server/api
+        shell: bash
+        run: |
+          set -euo pipefail
+          if ! npm install --no-audit --no-fund > "$RUNNER_TEMP/sodfa-api-install.log" 2>&1; then
+            echo "::error::Private API dependency installation failed; private logs are suppressed."
+            exit 1
+          fi
+          echo "API dependency installation passed."
+
+      - name: Audit production API dependencies
+        working-directory: source/server/api
+        shell: bash
+        run: |
+          set -euo pipefail
+          if ! npm audit --omit=dev --audit-level=high > "$RUNNER_TEMP/sodfa-api-audit.log" 2>&1; then
+            echo "::error::The API production dependency audit found a high-severity advisory or could not complete."
+            exit 1
+          fi
+          echo "API production dependency audit passed."
+
+      - name: Apply API database migrations
+        working-directory: source/server/api
+        shell: bash
+        run: |
+          set -euo pipefail
+          if ! npm run migrate > "$RUNNER_TEMP/sodfa-api-migrate.log" 2>&1; then
+            echo "::error::Private API database migrations failed; private logs are suppressed."
+            exit 1
+          fi
+          echo "API database migrations passed."
+
+      - name: Run API unit and PostgreSQL/Redis integration tests
+        working-directory: source/server/api
+        shell: bash
+        run: |
+          set -euo pipefail
+          if ! npm test > "$RUNNER_TEMP/sodfa-api-tests.log" 2>&1; then
+            echo "::error::API unit or PostgreSQL/Redis integration tests failed; private logs are suppressed."
+            exit 1
+          fi
+          echo "API unit and PostgreSQL/Redis integration tests passed."
 
       - name: Set up Java
         uses: actions/setup-java@77dd5b2ce225ea11469928ac317850245a74ae78
@@ -163,3 +249,4 @@ jobs:
           rm -f source/android/key.properties source/android/app/ci-release-smoke.jks
           rm -rf "$RUNNER_TEMP/sodfa-symbols"
           rm -f "$RUNNER_TEMP"/sodfa-*.log
+          rm -f "$RUNNER_TEMP"/sodfa-api-*.log
