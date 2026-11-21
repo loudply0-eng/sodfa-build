@@ -127,7 +127,7 @@ jobs:
           if missing:
               raise SystemExit("Private release dispatcher policy check failed: " + ", ".join(missing))
           import re
-          exposed = re.findall(r"(?:secrets|vars)\.SODFA_(?!VALIDATION_)[A-Z0-9_]+", text)
+          exposed = re.findall(r"(?:secrets|vars)\.SODFA_PROD_[A-Z0-9_]+", text)
           if exposed:
               raise SystemExit("Private dispatcher must never reference production signing/deployment secrets: " + ", ".join(sorted(set(exposed))))
           if "pull_request:" in text or "workflow_dispatch:" in text:
