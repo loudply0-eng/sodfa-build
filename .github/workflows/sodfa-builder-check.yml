@@ -53,7 +53,9 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          bash -n scripts/sodfa-remote-publish.sh scripts/test-sodfa-remote-publish.sh
+          for script in scripts/sodfa-remote-publish.sh scripts/test-sodfa-remote-publish.sh; do
+            bash -n "$script"
+          done
           bash scripts/test-sodfa-remote-publish.sh
 
       - name: Check secure release and source-validation policies
