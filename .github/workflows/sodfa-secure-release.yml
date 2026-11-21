@@ -62,20 +62,20 @@ jobs:
       - name: Validate required production configuration
         shell: bash
         env:
-          SOURCE_TOKEN: ${{ secrets.SODFA_SOURCE_READ_TOKEN }}
-          ANDROID_KEYSTORE_BASE64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
-          ANDROID_KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
-          ANDROID_KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
-          ANDROID_KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
-          UPDATE_PRIVATE_KEY_PEM: ${{ secrets.SODFA_UPDATE_PRIVATE_KEY_PEM }}
-          UPDATE_PUBLIC_KEY_BASE64: ${{ vars.SODFA_UPDATE_PUBLIC_KEY_BASE64 }}
-          DEPLOY_HOST: ${{ secrets.SODFA_DEPLOY_HOST }}
-          DEPLOY_USER: ${{ secrets.SODFA_DEPLOY_USER }}
-          DEPLOY_SSH_KEY: ${{ secrets.SODFA_DEPLOY_SSH_KEY }}
-          DEPLOY_KNOWN_HOSTS: ${{ secrets.SODFA_DEPLOY_KNOWN_HOSTS }}
+          SOURCE_TOKEN: ${{ secrets.SODFA_PROD_SOURCE_READ_TOKEN }}
+          SODFA_PROD_ANDROID_KEYSTORE_BASE64: ${{ secrets.SODFA_PROD_ANDROID_KEYSTORE_BASE64 }}
+          SODFA_PROD_ANDROID_KEYSTORE_PASSWORD: ${{ secrets.SODFA_PROD_ANDROID_KEYSTORE_PASSWORD }}
+          SODFA_PROD_ANDROID_KEY_ALIAS: ${{ secrets.SODFA_PROD_ANDROID_KEY_ALIAS }}
+          SODFA_PROD_ANDROID_KEY_PASSWORD: ${{ secrets.SODFA_PROD_ANDROID_KEY_PASSWORD }}
+          UPDATE_PRIVATE_KEY_PEM: ${{ secrets.SODFA_PROD_UPDATE_PRIVATE_KEY_PEM }}
+          UPDATE_PUBLIC_KEY_BASE64: ${{ vars.SODFA_PROD_UPDATE_PUBLIC_KEY_BASE64 }}
+          DEPLOY_HOST: ${{ secrets.SODFA_PROD_DEPLOY_HOST }}
+          DEPLOY_USER: ${{ secrets.SODFA_PROD_DEPLOY_USER }}
+          DEPLOY_SSH_KEY: ${{ secrets.SODFA_PROD_DEPLOY_SSH_KEY }}
+          DEPLOY_KNOWN_HOSTS: ${{ secrets.SODFA_PROD_DEPLOY_KNOWN_HOSTS }}
         run: |
           set -euo pipefail
-          for name in SOURCE_TOKEN ANDROID_KEYSTORE_BASE64 ANDROID_KEYSTORE_PASSWORD ANDROID_KEY_ALIAS ANDROID_KEY_PASSWORD UPDATE_PRIVATE_KEY_PEM UPDATE_PUBLIC_KEY_BASE64 DEPLOY_HOST DEPLOY_USER DEPLOY_SSH_KEY DEPLOY_KNOWN_HOSTS; do
+          for name in SOURCE_TOKEN SODFA_PROD_ANDROID_KEYSTORE_BASE64 SODFA_PROD_ANDROID_KEYSTORE_PASSWORD SODFA_PROD_ANDROID_KEY_ALIAS SODFA_PROD_ANDROID_KEY_PASSWORD UPDATE_PRIVATE_KEY_PEM UPDATE_PUBLIC_KEY_BASE64 DEPLOY_HOST DEPLOY_USER DEPLOY_SSH_KEY DEPLOY_KNOWN_HOSTS; do
             if [ -z "${!name:-}" ]; then
               echo "::error::Missing required production setting: $name"
               exit 1
@@ -89,7 +89,7 @@ jobs:
         with:
           repository: loudply0-eng/sodfa-
           ref: main
-          token: ${{ secrets.SODFA_SOURCE_READ_TOKEN }}
+          token: ${{ secrets.SODFA_PROD_SOURCE_READ_TOKEN }}
           path: source
           fetch-depth: 1
           persist-credentials: false
@@ -185,16 +185,16 @@ jobs:
       - name: Prepare Android signing key
         shell: bash
         env:
-          ANDROID_KEYSTORE_BASE64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
-          ANDROID_KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
-          ANDROID_KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
-          ANDROID_KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
+          SODFA_PROD_ANDROID_KEYSTORE_BASE64: ${{ secrets.SODFA_PROD_ANDROID_KEYSTORE_BASE64 }}
+          SODFA_PROD_ANDROID_KEYSTORE_PASSWORD: ${{ secrets.SODFA_PROD_ANDROID_KEYSTORE_PASSWORD }}
+          SODFA_PROD_ANDROID_KEY_ALIAS: ${{ secrets.SODFA_PROD_ANDROID_KEY_ALIAS }}
+          SODFA_PROD_ANDROID_KEY_PASSWORD: ${{ secrets.SODFA_PROD_ANDROID_KEY_PASSWORD }}
         run: |
           set -euo pipefail
-          printf '%s' "$ANDROID_KEYSTORE_BASE64" | tr -d '[:space:]' | base64 --decode > source/android/app/upload-keystore.jks
+          printf '%s' "$SODFA_PROD_ANDROID_KEYSTORE_BASE64" | tr -d '[:space:]' | base64 --decode > source/android/app/upload-keystore.jks
           test -s source/android/app/upload-keystore.jks
           keytool -list -v -keystore source/android/app/upload-keystore.jks \
-            -alias "$ANDROID_KEY_ALIAS" -storepass "$ANDROID_KEYSTORE_PASSWORD" \
+            -alias "$SODFA_PROD_ANDROID_KEY_ALIAS" -storepass "$SODFA_PROD_ANDROID_KEYSTORE_PASSWORD" \
             > "$RUNNER_TEMP/sodfa-keystore-info.txt"
           ACTUAL_CERT="$(awk -F': ' '/SHA256:/{gsub(/:/,"",$2); print tolower($2); exit}' "$RUNNER_TEMP/sodfa-keystore-info.txt")"
           EXPECTED_CERT="369c770895b6f20830f5aa5891e0146623c92391c8589f73542cdd7fbe559ee2"
@@ -204,32 +204,32 @@ jobs:
           fi
           cat > source/android/key.properties <<EOF
           storeFile=upload-keystore.jks
-          storePassword=$ANDROID_KEYSTORE_PASSWORD
-          keyAlias=$ANDROID_KEY_ALIAS
-          keyPassword=$ANDROID_KEY_PASSWORD
+          storePassword=$SODFA_PROD_ANDROID_KEYSTORE_PASSWORD
+          keyAlias=$SODFA_PROD_ANDROID_KEY_ALIAS
+          keyPassword=$SODFA_PROD_ANDROID_KEY_PASSWORD
           EOF
           chmod 600 source/android/key.properties source/android/app/upload-keystore.jks
 
       - name: Verify update signing key pair
         shell: bash
         env:
-          SODFA_UPDATE_PRIVATE_KEY_PEM: ${{ secrets.SODFA_UPDATE_PRIVATE_KEY_PEM }}
-          SODFA_UPDATE_PUBLIC_KEY_BASE64: ${{ vars.SODFA_UPDATE_PUBLIC_KEY_BASE64 }}
+          SODFA_PROD_UPDATE_PRIVATE_KEY_PEM: ${{ secrets.SODFA_PROD_UPDATE_PRIVATE_KEY_PEM }}
+          SODFA_PROD_UPDATE_PUBLIC_KEY_BASE64: ${{ vars.SODFA_PROD_UPDATE_PUBLIC_KEY_BASE64 }}
         run: |
           set -euo pipefail
           umask 077
-          printf '%s\n' "$SODFA_UPDATE_PRIVATE_KEY_PEM" > "$RUNNER_TEMP/sodfa-update-private.pem"
+          printf '%s\n' "$SODFA_PROD_UPDATE_PRIVATE_KEY_PEM" > "$RUNNER_TEMP/sodfa-update-private.pem"
           chmod 600 "$RUNNER_TEMP/sodfa-update-private.pem"
           openssl pkey -in "$RUNNER_TEMP/sodfa-update-private.pem" -check -noout
           openssl pkey -in "$RUNNER_TEMP/sodfa-update-private.pem" -pubout -out "$RUNNER_TEMP/sodfa-update-public.pem"
           openssl pkey -pubin -in "$RUNNER_TEMP/sodfa-update-public.pem" -outform DER -out "$RUNNER_TEMP/sodfa-update-public.der"
           tail -c 32 "$RUNNER_TEMP/sodfa-update-public.der" | base64 -w0 > "$RUNNER_TEMP/sodfa-update-public.b64"
           ACTUAL_PUBLIC_KEY="$(cat "$RUNNER_TEMP/sodfa-update-public.b64")"
-          if [ "$ACTUAL_PUBLIC_KEY" != "$SODFA_UPDATE_PUBLIC_KEY_BASE64" ]; then
+          if [ "$ACTUAL_PUBLIC_KEY" != "$SODFA_PROD_UPDATE_PUBLIC_KEY_BASE64" ]; then
             echo "::error::The Ed25519 public key variable does not match the private key secret."
             exit 1
           fi
-          printf '%s' "$SODFA_UPDATE_PUBLIC_KEY_BASE64" | base64 --decode > "$RUNNER_TEMP/sodfa-update-public.raw"
+          printf '%s' "$SODFA_PROD_UPDATE_PUBLIC_KEY_BASE64" | base64 --decode > "$RUNNER_TEMP/sodfa-update-public.raw"
           test "$(wc -c < "$RUNNER_TEMP/sodfa-update-public.raw")" -eq 32
 
       - name: Build obfuscated signed APK
@@ -237,13 +237,13 @@ jobs:
         shell: bash
         env:
           SODFA_UPDATE_MANIFEST_URL: https://mahmoudaljuorany.store/updates/sodfa/manifest.json
-          SODFA_UPDATE_PUBLIC_KEY_BASE64: ${{ vars.SODFA_UPDATE_PUBLIC_KEY_BASE64 }}
+          SODFA_PROD_UPDATE_PUBLIC_KEY_BASE64: ${{ vars.SODFA_PROD_UPDATE_PUBLIC_KEY_BASE64 }}
         run: |
           set -euo pipefail
           if ! flutter build apk --release --obfuscate \
             --split-debug-info="$RUNNER_TEMP/sodfa-symbols" \
             --dart-define=SODFA_UPDATE_MANIFEST_URL="$SODFA_UPDATE_MANIFEST_URL" \
-            --dart-define=SODFA_UPDATE_PUBLIC_KEY_BASE64="$SODFA_UPDATE_PUBLIC_KEY_BASE64" \
+            --dart-define=SODFA_PROD_UPDATE_PUBLIC_KEY_BASE64="$SODFA_PROD_UPDATE_PUBLIC_KEY_BASE64" \
             > "$RUNNER_TEMP/sodfa-release-build.log" 2>&1; then
             echo "::error::The signed release build failed. Private source build logs were intentionally not published."
             exit 1
@@ -264,8 +264,8 @@ jobs:
         working-directory: source
         shell: bash
         env:
-          SODFA_UPDATE_PRIVATE_KEY_PEM: ${{ secrets.SODFA_UPDATE_PRIVATE_KEY_PEM }}
-          SODFA_UPDATE_PUBLIC_KEY_BASE64: ${{ vars.SODFA_UPDATE_PUBLIC_KEY_BASE64 }}
+          SODFA_PROD_UPDATE_PRIVATE_KEY_PEM: ${{ secrets.SODFA_PROD_UPDATE_PRIVATE_KEY_PEM }}
+          SODFA_PROD_UPDATE_PUBLIC_KEY_BASE64: ${{ vars.SODFA_PROD_UPDATE_PUBLIC_KEY_BASE64 }}
           UPDATE_BASE_URL: https://mahmoudaljuorany.store/updates/sodfa
         run: |
           set -euo pipefail
@@ -322,7 +322,7 @@ jobs:
           )
           PY
 
-          printf '%s\n' "$SODFA_UPDATE_PRIVATE_KEY_PEM" > "$RUNNER_TEMP/sodfa-update-private.pem"
+          printf '%s\n' "$SODFA_PROD_UPDATE_PRIVATE_KEY_PEM" > "$RUNNER_TEMP/sodfa-update-private.pem"
           chmod 600 "$RUNNER_TEMP/sodfa-update-private.pem"
           openssl pkeyutl -sign -rawin \
             -inkey "$RUNNER_TEMP/sodfa-update-private.pem" \
@@ -350,10 +350,10 @@ jobs:
         working-directory: source
         shell: bash
         env:
-          DEPLOY_HOST: ${{ secrets.SODFA_DEPLOY_HOST }}
-          DEPLOY_USER: ${{ secrets.SODFA_DEPLOY_USER }}
-          DEPLOY_SSH_KEY: ${{ secrets.SODFA_DEPLOY_SSH_KEY }}
-          DEPLOY_KNOWN_HOSTS: ${{ secrets.SODFA_DEPLOY_KNOWN_HOSTS }}
+          DEPLOY_HOST: ${{ secrets.SODFA_PROD_DEPLOY_HOST }}
+          DEPLOY_USER: ${{ secrets.SODFA_PROD_DEPLOY_USER }}
+          DEPLOY_SSH_KEY: ${{ secrets.SODFA_PROD_DEPLOY_SSH_KEY }}
+          DEPLOY_KNOWN_HOSTS: ${{ secrets.SODFA_PROD_DEPLOY_KNOWN_HOSTS }}
           UPDATE_BASE_URL: https://mahmoudaljuorany.store/updates/sodfa
         run: |
           set -euo pipefail
