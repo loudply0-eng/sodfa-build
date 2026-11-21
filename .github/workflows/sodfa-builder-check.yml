@@ -75,5 +75,31 @@ jobs:
               and "StrictHostKeyChecking=yes" in text
           ):
               raise SystemExit("Server publishing requires a signed manifest and pinned SSH host keys.")
+          validation_path = Path(".github/workflows/sodfa-source-validation.yml")
+          validation_text = validation_path.read_text(encoding="utf-8")
+          validation_required = [
+              "SODFA_SOURCE_READ_TOKEN",
+              "persist-credentials: false",
+              "postgres:18-alpine",
+              "redis:8.0-alpine",
+              "npm audit --omit=dev --audit-level=high",
+              "npm run migrate",
+              "SODFA_API_INTEGRATION",
+              "npm test",
+              "JWT_SECRET=\\"$(openssl rand -hex 32)\\"",
+          ]
+          missing_validation = [item for item in validation_required if item not in validation_text]
+          if missing_validation:
+              raise SystemExit("Private-source validation policy check failed: " + ", ".join(missing_validation))
+          forbidden_secrets = [
+              "ANDROID_KEYSTORE_BASE64",
+              "ANDROID_KEYSTORE_PASSWORD",
+              "SODFA_UPDATE_PRIVATE_KEY_PEM",
+              "SODFA_DEPLOY_SSH_KEY",
+              "SODFA_DEPLOY_HOST",
+          ]
+          exposed = [item for item in forbidden_secrets if item in validation_text]
+          if exposed:
+              raise SystemExit("Production secrets must not appear in source-validation workflow: " + ", ".join(exposed))
           print("SODFA builder policy checks passed.")
           PY
