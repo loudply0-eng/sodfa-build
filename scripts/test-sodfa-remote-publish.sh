@@ -16,7 +16,9 @@ stage_release() {
   local signature="$5"
 
   printf '%s' "$apk_content" > "$REMOTE_DIR/.$apk_name.uploading"
-  python3 - "$build" "$manifest_version" > "$REMOTE_DIR/.manifest.json.uploading" <<'PY'
+  local digest
+  digest="$(sha256sum "$REMOTE_DIR/.$apk_name.uploading" | awk '{print $1}')"
+  python3 - "$build" "$manifest_version" "$digest" > "$REMOTE_DIR/.manifest.json.uploading" <<'PY'
 import json,sys
 print(json.dumps({
   "application_id":"com.sodfa.sodfa",
@@ -25,7 +27,7 @@ print(json.dumps({
   "version":sys.argv[2],
   "build_number":int(sys.argv[1]),
   "apk_url":f"https://example.invalid/updates/sodfa/sodfa-{sys.argv[2]}+{sys.argv[1]}.apk",
-  "sha256":"0"*64
+  "sha256":sys.argv[3]
 },separators=(",",":")))
 PY
   printf '%s' "$signature" > "$REMOTE_DIR/.manifest.json.sig.uploading"
