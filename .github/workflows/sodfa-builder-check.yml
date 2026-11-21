@@ -123,6 +123,9 @@ jobs:
           if "name: sodfa-production" in validation_text:
               raise SystemExit("Source validation must use the isolated sodfa-validation environment.")
 
+          if re.search(r"^\\s*cache\\s*:", validation_text, re.MULTILINE):
+              raise SystemExit("Untrusted source validation must not read or write shared dependency caches.")
+
           forbidden_secrets = [
               "ANDROID_KEYSTORE_BASE64",
               "ANDROID_KEYSTORE_PASSWORD",
