@@ -369,12 +369,29 @@ jobs:
           REMOTE_SIG_TMP="$REMOTE_DIR/.manifest.json.sig.uploading"
 
           install -m 700 -d ~/.ssh
-          printf '%s\n' "$DEPLOY_SSH_KEY" > ~/.ssh/sodfa_deploy_key
+          python3 - <<'PY'
+          import base64, os
+          raw = os.environ["DEPLOY_SSH_KEY"].strip()
+          if len(raw) >= 2 and raw[0] == raw[-1] and raw[0] in ("'", '"'):
+              raw = raw[1:-1]
+          raw = raw.replace("\\r\\n", "\\n").replace("\\n", "\\n").replace("\\r", "\\n").replace("\r", "")
+          if "-----BEGIN " not in raw:
+              try:
+                  decoded = base64.b64decode("".join(raw.split()), validate=True).decode("utf-8")
+                  if "-----BEGIN " in decoded:
+                      raw = decoded
+              except Exception:
+                  pass
+          if "-----BEGIN " not in raw or "PRIVATE KEY-----" not in raw:
+              raise SystemExit("Deployment SSH key must be a PEM or OpenSSH private key, or base64-encoded PEM.")
+          with open(os.path.expanduser("~/.ssh/sodfa_deploy_key"), "w", encoding="utf-8", newline="\\n") as key:
+              key.write(raw.rstrip() + "\\n")
+          PY
           chmod 600 ~/.ssh/sodfa_deploy_key
           printf '%s\n' "$DEPLOY_KNOWN_HOSTS" | tr -d '\r' > ~/.ssh/known_hosts
           chmod 600 ~/.ssh/known_hosts
-          ssh-keygen -y -f ~/.ssh/sodfa_deploy_key > /dev/null
           test -s ~/.ssh/known_hosts
+          ssh-keygen -y -f ~/.ssh/sodfa_deploy_key > /dev/null
 
           scp -i ~/.ssh/sodfa_deploy_key -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes \
             build/app/outputs/flutter-apk/app-release.apk \
