@@ -16,12 +16,23 @@ This repository is a **public build orchestrator only**. The Flutter application
 
 ## Required GitHub configuration
 
-Create a GitHub Environment named `sodfa-production` in this public repository:
+Create **two separate GitHub Environments** in this public repository. Do not put the source-read token in the production environment, and do not put release/deploy secrets in the validation environment.
+
+### `sodfa-validation` — private-source tests only
 
 1. Restrict deployment branches to `main` only.
-2. Add at least one required reviewer for production jobs.
+2. Add at least one required reviewer.
+3. Add only this **environment secret**:
+   - `SODFA_SOURCE_READ_TOKEN`: a fine-grained token scoped only to `loudply0-eng/sodfa-`, with **Contents: Read-only** permission.
+
+This environment is used by the source-validation workflow to clone a selected private source ref and run tests. It must not contain Android signing keys, OTA signing keys, or server deployment keys.
+
+### `sodfa-production` — signed release and deployment
+
+1. Restrict deployment branches to `main` only.
+2. Add at least one required reviewer.
 3. Add these **environment secrets**:
-   - `SODFA_SOURCE_READ_TOKEN`: fine-grained token scoped only to `loudply0-eng/sodfa-`, with **Contents: Read-only** permission.
+   - `SODFA_SOURCE_READ_TOKEN`: a separate fine-grained token scoped only to `loudply0-eng/sodfa-`, with **Contents: Read-only** permission.
    - `ANDROID_KEYSTORE_BASE64`
    - `ANDROID_KEYSTORE_PASSWORD`
    - `ANDROID_KEY_ALIAS`
@@ -33,6 +44,8 @@ Create a GitHub Environment named `sodfa-production` in this public repository:
    - `SODFA_DEPLOY_KNOWN_HOSTS`: pre-verified known-hosts line(s) for the deployment server. Do not generate trust at deployment time with `ssh-keyscan`.
 4. Add this **environment variable** (not secret):
    - `SODFA_UPDATE_PUBLIC_KEY_BASE64`: Base64 encoding of the 32-byte raw Ed25519 public key paired with `SODFA_UPDATE_PRIVATE_KEY_PEM`.
+
+Use separate least-privilege read tokens for validation and production, and rotate them if either one is exposed. Never give either token write access.
 
 Never give the source token write access. Do not use a personal token with access to unrelated repositories. Never commit the Ed25519 private key or paste it into a workflow file.
 
@@ -57,7 +70,7 @@ tail -c 32 sodfa-update-public.der | base64 -w0 > sodfa-update-public-key.txt
 
 Open **Actions → SODFA Private Source Validation → Run workflow**, select the builder's `main` branch, enter the private source branch or commit in `source_ref`, and set `confirm_validation` to `true`.
 
-This workflow uses the read-only source token only for checkout. It does not receive the Android signing key, update-signing private key, or deployment SSH key. It starts disposable PostgreSQL 18 and Redis 8 services, installs private API dependencies, audits production dependencies for high-severity advisories, applies database migrations, and runs API unit and integration tests. It then runs Flutter dependency installation, analysis, tests, a debug build, and an obfuscated Release smoke build with a temporary disposable key. Private source logs are suppressed and removed during cleanup. The protected environment approval is still required because the private source read token is used.
+This workflow uses only the read-only source token stored in the separate `sodfa-validation` environment. It does not receive the Android signing key, update-signing private key, or deployment SSH key. It starts disposable PostgreSQL 18 and Redis 8 services, installs private API dependencies, audits production dependencies for high-severity advisories, applies database migrations, and runs API unit and integration tests. It then runs Flutter dependency installation, analysis, tests, a debug build, and an obfuscated Release smoke build with a temporary disposable key. Private source logs are suppressed and removed during cleanup. The protected environment approval is still required because the private source read token is used.
 
 ## Run a release build
 
