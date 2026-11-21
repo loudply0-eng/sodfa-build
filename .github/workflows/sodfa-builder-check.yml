@@ -18,6 +18,12 @@ jobs:
         with:
           persist-credentials: false
 
+      - name: Validate workflow YAML syntax
+        shell: bash
+        run: |
+          set -euo pipefail
+          ruby -e 'require "yaml"; ARGV.each { |path| YAML.load_file(path, aliases: true); puts "Valid YAML: #{path}" }' .github/workflows/*.yml
+
       - name: Check public builder contains no app source
         shell: bash
         run: |
