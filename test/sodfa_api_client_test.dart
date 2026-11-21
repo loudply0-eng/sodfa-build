@@ -201,8 +201,8 @@ void main() {
     expect((post['post'] as Map)['id'], 'post-1');
     expect((story['story'] as Map)['id'], 'story-1');
     expect(calls.length, 3);
-    await expectLater(
-      client.createStory(body: ' '),
+    expect(
+      () => client.createStory(body: ' '),
       throwsA(isA<ArgumentError>()),
     );
     client.close();
@@ -216,8 +216,8 @@ void main() {
       httpClient: MockClient((_) async => jsonResponse(201, const {'message': {}})),
     );
 
-    await expectLater(
-      client.sendEncryptedMessage(
+    expect(
+      () => client.sendEncryptedMessage(
         conversationId: 'conversation-1',
         ciphertext: 'hello this is plaintext',
         nonce: 'invalid',
