@@ -55,6 +55,7 @@ jobs:
           set -euo pipefail
           python3 - <<'PY'
           from pathlib import Path
+          import re
 
           release_path = Path(".github/workflows/sodfa-secure-release.yml")
           release_text = release_path.read_text(encoding="utf-8")
@@ -76,6 +77,9 @@ jobs:
               "manifest.json.sig",
               "StrictHostKeyChecking=yes",
               "cmp -s manifest.json",
+              "UPLOADED_SHA=",
+              "sha256sum '$REMOTE_APK_TMP'",
+              "Refusing to replace a published build number with different APK bytes.",
               "npm audit --omit=dev --audit-level=high",
               "postgres:18-alpine",
               "redis:8.0-alpine",
@@ -129,6 +133,20 @@ jobs:
           exposed = [item for item in forbidden_secrets if item in validation_text]
           if exposed:
               raise SystemExit("Production secrets must not appear in source-validation workflow: " + ", ".join(exposed))
+
+          unpinned = []
+          for workflow in Path(".github/workflows").glob("*.yml"):
+              for number, line in enumerate(workflow.read_text(encoding="utf-8").splitlines(), 1):
+                  match = re.match(r"^\\s*uses:\\s*(\\S+)\\s*$", line)
+                  if not match:
+                      continue
+                  action = match.group(1)
+                  if action.startswith("./"):
+                      continue
+                  if not re.fullmatch(r"[^@\\s]+@[0-9a-f]{40}", action):
+                      unpinned.append(f"{workflow}:{number}:{action}")
+          if unpinned:
+              raise SystemExit("All external GitHub Actions must be pinned to full commit SHAs: " + ", ".join(unpinned))
 
           print("SODFA builder policy checks passed.")
           PY
