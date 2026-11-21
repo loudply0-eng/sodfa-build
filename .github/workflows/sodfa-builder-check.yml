@@ -49,6 +49,13 @@ jobs:
             exit 1
           fi
 
+      - name: Test server-side OTA publication safeguards
+        shell: bash
+        run: |
+          set -euo pipefail
+          bash -n scripts/sodfa-remote-publish.sh scripts/test-sodfa-remote-publish.sh
+          bash scripts/test-sodfa-remote-publish.sh
+
       - name: Check secure release and source-validation policies
         shell: bash
         run: |
