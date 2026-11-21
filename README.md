@@ -91,7 +91,7 @@ The signature file is base64-encoded Ed25519 over the exact UTF-8 bytes of `mani
 
 ## Private source repository note
 
-The private `loudply0-eng/sodfa-` repository remains private on the GitHub Free-compatible configuration. GitHub Free does not provide Environments or environment secrets for private repositories. Its three manual Oracle workflows therefore use only the uniquely named private repository secrets `SODFA_PROD_ORACLE_SSH_KEY` and `SODFA_PROD_ORACLE_KNOWN_HOSTS`, require `main` plus explicit confirmation, and do not run on push or pull request. Do not add legacy unprefixed repository secret names.
+The private `loudply0-eng/sodfa-` repository remains private on the GitHub Free-compatible configuration. GitHub Free does not provide Environments or environment secrets for private repositories. Its three manual Oracle workflows use the uniquely named private repository secrets `SODFA_PROD_ORACLE_SSH_KEY` and `SODFA_PROD_ORACLE_KNOWN_HOSTS`. The automatic Android release dispatcher additionally requires `SODFA_BUILDER_RELEASE_DISPATCH_TOKEN`, a fine-grained token scoped only to this public builder with **Actions: Read and write** permission and no Contents write permission. It dispatches the protected release workflow for the exact source commit; it does not receive Android signing or server SSH keys. Do not add legacy unprefixed repository secret names.
 
 ## Public-source history limitation
 
