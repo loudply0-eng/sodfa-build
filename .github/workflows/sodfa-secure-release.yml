@@ -131,6 +131,7 @@ jobs:
         shell: bash
         env:
           SODFA_UPDATE_MANIFEST_URL: https://mahmoudaljuorany.store/updates/sodfa/manifest.json
+          EXPECTED_CERT: 369c770895b6f20830f5aa5891e0146623c92391c8589f73542cdd7fbe559ee2
         run: |
           set -euo pipefail
           if ! flutter build apk --release --obfuscate \
