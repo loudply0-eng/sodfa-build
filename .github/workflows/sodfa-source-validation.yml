@@ -90,6 +90,51 @@ jobs:
           fetch-depth: 1
           persist-credentials: false
 
+      - name: Validate private workflow syntax and automatic release permissions
+        shell: bash
+        run: |
+          set -euo pipefail
+          ruby -e 'require "yaml"; ARGV.each { |path| YAML.load_file(path, aliases: true); puts "Valid YAML: #{path}" }' source/.github/workflows/*.yml
+          python3 - <<'PY'
+          from pathlib import Path
+
+          path = Path("source/.github/workflows/sodfa-release-dispatch.yml")
+          if not path.is_file():
+              raise SystemExit("Private automatic Android release dispatcher is missing.")
+          text = path.read_text(encoding="utf-8")
+          required = [
+              "name: SODFA Automatic Android Release Dispatch",
+              "push:",
+              "branches: [main]",
+              '"lib/**"',
+              '"android/**"',
+              '"assets/**"',
+              '"pubspec.yaml"',
+              '"pubspec.lock"',
+              '"docs/CHANGELOG.json"',
+              "permissions:",
+              "contents: read",
+              "SODFA_BUILDER_RELEASE_DISPATCH_TOKEN",
+              "SOURCE_SHA: ${{ github.sha }}",
+              "^[0-9a-f]{40}$",
+              "gh workflow run sodfa-secure-release.yml",
+              "--repo loudply0-eng/sodfa-build",
+              "--ref main",
+              "--field confirm_release=true",
+              '--field source_ref="$SOURCE_SHA"',
+          ]
+          missing = [item for item in required if item not in text]
+          if missing:
+              raise SystemExit("Private release dispatcher policy check failed: " + ", ".join(missing))
+          forbidden = ["SODFA_PROD_ANDROID", "SODFA_PROD_UPDATE_PRIVATE_KEY", "SODFA_PROD_DEPLOY_SSH_KEY", "SODFA_PROD_SOURCE_READ_TOKEN"]
+          exposed = [item for item in forbidden if item in text]
+          if exposed:
+              raise SystemExit("Private dispatcher must never receive production signing/deployment secrets: " + ", ".join(exposed))
+          if "pull_request:" in text or "workflow_dispatch:" in text:
+              raise SystemExit("Automatic release dispatch must only run on trusted private main pushes.")
+          print("Private automatic release dispatcher policy checks passed.")
+          PY
+
       - name: Set up Node.js 26
         uses: actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e
         with:
