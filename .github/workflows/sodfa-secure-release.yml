@@ -406,7 +406,6 @@ jobs:
           chmod 600 ~/.ssh/known_hosts
           test -s ~/.ssh/known_hosts
           ssh-keygen -y -f ~/.ssh/sodfa_deploy_key > /dev/null
-          ssh-keygen -y -f ~/.ssh/sodfa_deploy_key > /dev/null
 
           scp -i ~/.ssh/sodfa_deploy_key -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes \
             build/app/outputs/flutter-apk/app-release.apk \
