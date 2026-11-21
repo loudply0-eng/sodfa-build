@@ -126,7 +126,7 @@ jobs:
           test_path = Path("scripts/test-sodfa-remote-publish.sh")
           test_text = test_path.read_text(encoding="utf-8")
           test_required = [
-              "idempotently accept the exact same build",
+              "Idempotently accept the exact same build",
               "Reject the same build number when APK bytes differ",
               "Reject the same APK/build when the manifest/signature differ",
               "reject an older release attempting rollback",
