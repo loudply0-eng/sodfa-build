@@ -49,13 +49,25 @@ jobs:
               "sodfa-production",
               "--obfuscate",
               "--split-debug-info=",
+              "SODFA_UPDATE_PRIVATE_KEY_PEM",
+              "SODFA_UPDATE_PUBLIC_KEY_BASE64",
+              "SODFA_DEPLOY_KNOWN_HOSTS",
+              "openssl pkeyutl -sign -rawin",
+              "manifest.json.sig",
+              "StrictHostKeyChecking=yes",
+              "cmp -s manifest.json",
           ]
           missing = [item for item in required if item not in text]
           if missing:
               raise SystemExit("Secure release policy check failed: " + ", ".join(missing))
           if "pull_request:" in text or "push:" in text:
               raise SystemExit("The private-source release workflow must not run on pull requests or pushes.")
-          if "scp " in text or "ssh " in text:
-              raise SystemExit("Automatic server publishing is disabled until signed update manifests are implemented.")
+          if ("scp " in text or "ssh " in text) and not (
+              "openssl pkeyutl -sign -rawin" in text
+              and "SODFA_UPDATE_PRIVATE_KEY_PEM" in text
+              and "SODFA_DEPLOY_KNOWN_HOSTS" in text
+              and "StrictHostKeyChecking=yes" in text
+          ):
+              raise SystemExit("Server publishing requires a signed manifest and pinned SSH host keys.")
           print("SODFA builder policy checks passed.")
           PY
