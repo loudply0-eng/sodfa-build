@@ -8,6 +8,11 @@ on:
         required: true
         type: boolean
         default: false
+      source_ref:
+        description: "Exact private source commit to build (40-character SHA); main is allowed for manual releases"
+        required: false
+        type: string
+        default: "main"
 
 permissions:
   contents: read
@@ -63,6 +68,7 @@ jobs:
         shell: bash
         env:
           SOURCE_TOKEN: ${{ secrets.SODFA_PROD_SOURCE_READ_TOKEN }}
+          SOURCE_REF: ${{ inputs.source_ref }}
           SODFA_PROD_ANDROID_KEYSTORE_BASE64: ${{ secrets.SODFA_PROD_ANDROID_KEYSTORE_BASE64 }}
           SODFA_PROD_ANDROID_KEYSTORE_PASSWORD: ${{ secrets.SODFA_PROD_ANDROID_KEYSTORE_PASSWORD }}
           SODFA_PROD_ANDROID_KEY_ALIAS: ${{ secrets.SODFA_PROD_ANDROID_KEY_ALIAS }}
@@ -83,12 +89,16 @@ jobs:
           done
           test "$GITHUB_EVENT_NAME" = "workflow_dispatch"
           test "$GITHUB_REF" = "refs/heads/main"
+          if ! [[ "$SOURCE_REF" =~ ^([0-9a-f]{40}|main)$ ]]; then
+            echo "::error::source_ref must be main or a full 40-character commit SHA."
+            exit 1
+          fi
 
       - name: Checkout private SODFA source
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
         with:
           repository: loudply0-eng/sodfa-
-          ref: main
+          ref: ${{ inputs.source_ref }}
           token: ${{ secrets.SODFA_PROD_SOURCE_READ_TOKEN }}
           path: source
           fetch-depth: 1
