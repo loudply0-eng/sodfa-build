@@ -363,6 +363,9 @@ jobs:
             exit 1
           fi
           APK_NAME="sodfa-$VERSION_LINE.apk"
+          APK="build/app/outputs/flutter-apk/app-release.apk"
+          test -s "$APK"
+          APK_SHA256="$(sha256sum "$APK" | awk '{print $1}')"
           REMOTE_DIR="/var/www/mahmoudaljuorany.store/updates/sodfa"
           REMOTE_APK_TMP="$REMOTE_DIR/.$APK_NAME.uploading"
           REMOTE_MANIFEST_TMP="$REMOTE_DIR/.manifest.json.uploading"
@@ -406,7 +409,20 @@ jobs:
           # transition window, clients fail closed rather than accept a mismatch.
           ssh -i ~/.ssh/sodfa_deploy_key -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes \
             "$DEPLOY_USER@$DEPLOY_HOST" \
-            "set -e; mv '$REMOTE_APK_TMP' '$REMOTE_DIR/$APK_NAME'; mv '$REMOTE_SIG_TMP' '$REMOTE_DIR/manifest.json.sig'; mv '$REMOTE_MANIFEST_TMP' '$REMOTE_DIR/manifest.json'"
+            "set -euo pipefail; \
+             UPLOADED_SHA=\$(sha256sum '$REMOTE_APK_TMP' | awk '{print \$1}'); \
+             test \"\$UPLOADED_SHA\" = '$APK_SHA256'; \
+             if [ -e '$REMOTE_DIR/$APK_NAME' ]; then \
+               EXISTING_SHA=\$(sha256sum '$REMOTE_DIR/$APK_NAME' | awk '{print \$1}'); \
+               if [ \"\$EXISTING_SHA\" != '$APK_SHA256' ]; then \
+                 echo 'Refusing to replace a published build number with different APK bytes.' >&2; \
+                 exit 1; \
+               fi; \
+             fi; \
+             mv '$REMOTE_APK_TMP' '$REMOTE_DIR/$APK_NAME'; \
+             mv '$REMOTE_SIG_TMP' '$REMOTE_DIR/manifest.json.sig'; \
+             mv '$REMOTE_MANIFEST_TMP' '$REMOTE_DIR/manifest.json'"
+
 
           curl --fail --silent --show-error --max-time 20 \
             "$UPDATE_BASE_URL/manifest.json" -o "$RUNNER_TEMP/sodfa-published-manifest.json"
