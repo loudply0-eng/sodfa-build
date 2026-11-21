@@ -44,6 +44,11 @@ void main() {
 
     expect(find.text('سجل تغييرات صدفة'), findsOneWidget);
     expect(find.text('الإصدار 0.1.8'), findsOneWidget);
+    await tester.scrollUntilVisible(
+      find.text('الإصدار 0.1.6'),
+      300,
+      scrollable: find.byType(Scrollable).last,
+    );
     expect(find.text('الإصدار 0.1.6'), findsOneWidget);
     final entries = await SodfaChangelogService.load();
     expect(entries.map((entry) => entry.version), contains('0.1.5'));
