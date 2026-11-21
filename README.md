@@ -12,6 +12,8 @@ This repository is a **public build orchestrator only**. The Flutter application
 - The workflow checks out only the private source repository's `main` branch using a fine-grained read-only token.
 - The workflow runs the private API dependency audit, PostgreSQL/Redis migrations and integration tests, then `flutter pub get`, `flutter analyze`, and `flutter test`; it builds an obfuscated APK, verifies the Android signing certificate, signs the update manifest with Ed25519, and publishes the APK plus manifest and detached signature.
 - Private source build logs, Android signing files, update signing keys, and Dart obfuscation symbols are not uploaded as artifacts.
+- The deployment verifies the APK SHA-256 on the Oracle server before publishing. A previously published version/build filename cannot be replaced by different APK bytes; increment the build number for a new binary.
+- Every external GitHub Action used by this public builder is pinned to a full commit SHA and checked by CI.
 - The app verifies the detached Ed25519 signature on the exact manifest bytes before parsing update metadata. It also enforces HTTPS, same-origin APK hosting under `/updates/sodfa/`, and SHA-256 verification.
 
 ## Required GitHub configuration
