@@ -10,7 +10,7 @@ trap 'rm -rf -- "$TMP_ROOT"' EXIT
 
 stage_release() {
   local build="$1"
-  local apk_name="$2"
+  local apk_name="sodfa-$2+$build.apk"
   local apk_content="$3"
   local manifest_version="$4"
   local signature="$5"
