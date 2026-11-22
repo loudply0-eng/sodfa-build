@@ -262,11 +262,21 @@ jobs:
           test -s "$APK"
           APKSIGNER="$(find "$ANDROID_HOME/build-tools" -type f -name apksigner | sort -V | tail -n 1)"
           test -n "$APKSIGNER"
-          "$APKSIGNER" verify --verbose --print-certs "$APK" > "$RUNNER_TEMP/sodfa-apk-signature.txt"
+          if ! "$APKSIGNER" verify --verbose --print-certs "$APK" > "$RUNNER_TEMP/sodfa-apk-signature.txt" 2>&1; then
+            echo "::error::APK signature verification failed."
+            sed -n '1,80p' "$RUNNER_TEMP/sodfa-apk-signature.txt"
+            exit 1
+          fi
           ACTUAL_APK_CERT="$(awk -F': ' '/certificate SHA-256 digest/{gsub(/:/,"",$2); print tolower($2); exit}' "$RUNNER_TEMP/sodfa-apk-signature.txt")"
           EXPECTED_CERT="369c770895b6f20830f5aa5891e0146623c92391c8589f73542cdd7fbe559ee2"
+          if ! [[ "$ACTUAL_APK_CERT" =~ ^[0-9a-f]{64}$ ]]; then
+            echo "::error::Could not read the APK signer SHA-256 fingerprint from apksigner output."
+            sed -n '1,80p' "$RUNNER_TEMP/sodfa-apk-signature.txt"
+            exit 1
+          fi
           if [ "$ACTUAL_APK_CERT" != "$EXPECTED_CERT" ]; then
             echo "::error::The output APK certificate does not match the registered SODFA release certificate."
+            echo "Observed APK certificate SHA-256: $ACTUAL_APK_CERT"
             exit 1
           fi
 
