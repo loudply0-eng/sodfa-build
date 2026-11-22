@@ -181,6 +181,11 @@ jobs:
               "SODFA_API_INTEGRATION",
               "npm test",
               'JWT_SECRET="$(openssl rand -hex 32)"',
+              "public-builder-only execution",
+              "sodfa-api-ci.yml",
+              "sodfa-ci.yml",
+              "sodfa-release-dispatch.yml",
+              "Private paid-runner workflows must remain removed",
           ]
           missing_validation = [item for item in validation_required if item not in validation_text]
           if missing_validation:
@@ -219,8 +224,12 @@ jobs:
               "SODFA_PROD_UPDATE_PRIVATE_KEY_PEM",
               "SODFA_PROD_UPDATE_PUBLIC_KEY_BASE64",
               "SODFA_PROD_DEPLOY_SSH_KEY",
-              "SODFA_BUILDER_RELEASE_DISPATCH_TOKEN",
               "SODFA_PROD_ORACLE_SSH_KEY",
+              "gh workflow run sodfa-source-validation.yml",
+              "gh workflow run sodfa-secure-release.yml",
+              "SOURCE_SHA",
+              "Standard GitHub-hosted runner",
+              "لا يحتاج المستودع الخاص إلى رمز لإطلاق البناء العام",
               "Require a pull request before merging",
               "Force pushes",
           ]
