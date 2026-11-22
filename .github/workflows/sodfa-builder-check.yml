@@ -1,0 +1,234 @@
+name: SODFA Builder Security Checks
+
+on:
+  pull_request:
+    branches: [main]
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+
+jobs:
+  policy:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Checkout builder only
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          persist-credentials: false
+
+      - name: Validate workflow YAML syntax
+        shell: bash
+        run: |
+          set -euo pipefail
+          ruby -e 'require "yaml"; ARGV.each { |path| YAML.load_file(path, aliases: true); puts "Valid YAML: #{path}" }' .github/workflows/*.yml
+
+      - name: Check public builder contains no application source
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          for path in lib android ios web windows macos linux server assets docs test integration_test; do
+            if [ -e "$path" ]; then
+              echo "::error::Application source, tests, assets, and release documentation must remain in the private SODFA repository."
+              exit 1
+            fi
+          done
+
+          for path in pubspec.yaml pubspec.lock analysis_options.yaml; do
+            if [ -e "$path" ]; then
+              echo "::error::Flutter project metadata must not be committed to the public build orchestrator."
+              exit 1
+            fi
+          done
+
+          if git ls-files | grep -E '(^|/)(pubspec\.(yaml|lock)|analysis_options\.yaml)$|\.(dart|kt|kts|gradle)$|(^|/)gradlew$|gradle-wrapper\.jar$'; then
+            echo "::error::Flutter or Android application source was found in the public build orchestrator."
+            exit 1
+          fi
+
+      - name: Test server-side OTA publication safeguards
+        shell: bash
+        run: |
+          set -euo pipefail
+          for script in scripts/sodfa-remote-publish.sh scripts/test-sodfa-remote-publish.sh; do
+            bash -n "$script"
+          done
+          bash scripts/test-sodfa-remote-publish.sh
+
+      - name: Check secure release and source-validation policies
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          from pathlib import Path
+          import re
+
+          release_path = Path(".github/workflows/sodfa-secure-release.yml")
+          release_text = release_path.read_text(encoding="utf-8")
+          release_required = [
+              "workflow_dispatch:",
+              "github.ref == 'refs/heads/main'",
+              "inputs.confirm_release == true",
+              "source_ref:",
+              "SOURCE_REF: ${{ inputs.source_ref }}",
+              "ref: ${{ inputs.source_ref }}",
+              "^([0-9a-f]{40}|main)$",
+              "loudply0-eng/sodfa-",
+              "SODFA_PROD_SOURCE_READ_TOKEN",
+              "persist-credentials: false",
+              "environment:",
+              "sodfa-production",
+              "--obfuscate",
+              "--split-debug-info=",
+              "SODFA_PROD_ANDROID_KEYSTORE_BASE64",
+              "SODFA_PROD_ANDROID_KEYSTORE_PASSWORD",
+              "SODFA_PROD_ANDROID_KEY_ALIAS",
+              "SODFA_PROD_ANDROID_KEY_PASSWORD",
+              "SODFA_PROD_UPDATE_PRIVATE_KEY_PEM",
+              "SODFA_PROD_UPDATE_PUBLIC_KEY_BASE64",
+              "--dart-define=SODFA_UPDATE_PUBLIC_KEY_BASE64=",
+              "SODFA_PROD_DEPLOY_HOST",
+              "SODFA_PROD_DEPLOY_USER",
+              "SODFA_PROD_DEPLOY_SSH_KEY",
+              "SODFA_PROD_DEPLOY_KNOWN_HOSTS",
+              "openssl pkeyutl -sign -rawin",
+              "force_update = release.get(\"force_update\", False)",
+              "minimum_build = release.get(\"min_supported_build\", 1)",
+              "rollout_percentage = release.get(\"rollout_percentage\", 100)",
+              "isinstance(force_update, bool)",
+              "not 1 <= minimum_build <= release_build",
+              "not 0 <= rollout_percentage <= 100",
+              "manifest.json.sig",
+              "StrictHostKeyChecking=yes",
+              "cmp -s manifest.json",
+              "sodfa-remote-publish.sh",
+              "bash -s -- '$REMOTE_DIR' '$APK_NAME' '$APK_SHA256' '$BUILD_NUMBER'",
+              "npm audit --omit=dev --audit-level=high",
+              "postgres:18-alpine",
+              "redis:8.0-alpine",
+              "npm run migrate",
+              "SODFA_API_INTEGRATION",
+              "npm test",
+          ]
+          missing = [item for item in release_required if item not in release_text]
+          if missing:
+              raise SystemExit("Secure release policy check failed: " + ", ".join(missing))
+          publish_path = Path("scripts/sodfa-remote-publish.sh")
+          publish_text = publish_path.read_text(encoding="utf-8")
+          publish_required = [
+              "UPLOADED_SHA=",
+              "CURRENT_BUILD=",
+              "Refusing to publish an older build over a newer release.",
+              "Refusing to replace an existing build number with different release bytes.",
+              "cmp -s",
+              "sha256sum",
+              "trap 'rm -f --",
+          ]
+          missing_publish = [item for item in publish_required if item not in publish_text]
+          if missing_publish:
+              raise SystemExit("Remote publication guard policy check failed: " + ", ".join(missing_publish))
+
+          test_path = Path("scripts/test-sodfa-remote-publish.sh")
+          test_text = test_path.read_text(encoding="utf-8")
+          test_required = [
+              "Idempotently accept the exact same build",
+              "Reject the same build number when APK bytes differ",
+              "Reject the same APK/build when the manifest/signature differ",
+              "reject an older release attempting rollback",
+          ]
+          missing_tests = [item for item in test_required if item not in test_text]
+          if missing_tests:
+              raise SystemExit("Remote publication regression-test coverage is incomplete: " + ", ".join(missing_tests))
+
+          if "pull_request:" in release_text or "push:" in release_text:
+              raise SystemExit("The private-source release workflow must not run on pull requests or pushes.")
+          if ("scp " in release_text or "ssh " in release_text) and not (
+              "openssl pkeyutl -sign -rawin" in release_text
+              and "SODFA_PROD_UPDATE_PRIVATE_KEY_PEM" in release_text
+              and "SODFA_PROD_DEPLOY_KNOWN_HOSTS" in release_text
+              and "StrictHostKeyChecking=yes" in release_text
+          ):
+              raise SystemExit("Server publishing requires a signed manifest and pinned SSH host keys.")
+
+          validation_path = Path(".github/workflows/sodfa-source-validation.yml")
+          validation_text = validation_path.read_text(encoding="utf-8")
+          validation_required = [
+              "workflow_dispatch:",
+              "github.ref == 'refs/heads/main'",
+              "inputs.confirm_validation == true",
+              "SODFA_VALIDATION_SOURCE_READ_TOKEN",
+              "persist-credentials: false",
+              "name: sodfa-validation",
+              "postgres:18-alpine",
+              "redis:8.0-alpine",
+              "npm audit --omit=dev --audit-level=high",
+              "npm run migrate",
+              "SODFA_API_INTEGRATION",
+              "npm test",
+              'JWT_SECRET="$(openssl rand -hex 32)"',
+          ]
+          missing_validation = [item for item in validation_required if item not in validation_text]
+          if missing_validation:
+              raise SystemExit("Private-source validation policy check failed: " + ", ".join(missing_validation))
+          if "name: sodfa-production" in validation_text:
+              raise SystemExit("Source validation must use the isolated sodfa-validation environment.")
+
+          if re.search(r"^\s*cache\s*:", validation_text, re.MULTILINE):
+              raise SystemExit("Untrusted source validation must not read or write shared dependency caches.")
+
+          forbidden_secrets = [
+              "SODFA_PROD_SOURCE_READ_TOKEN",
+              "SODFA_PROD_ANDROID_KEYSTORE_BASE64",
+              "SODFA_PROD_ANDROID_KEYSTORE_PASSWORD",
+              "SODFA_PROD_ANDROID_KEY_ALIAS",
+              "SODFA_PROD_ANDROID_KEY_PASSWORD",
+              "SODFA_PROD_UPDATE_PRIVATE_KEY_PEM",
+              "SODFA_PROD_UPDATE_PUBLIC_KEY_BASE64",
+              "SODFA_PROD_DEPLOY_HOST",
+              "SODFA_PROD_DEPLOY_USER",
+              "SODFA_PROD_DEPLOY_SSH_KEY",
+              "SODFA_PROD_DEPLOY_KNOWN_HOSTS",
+          ]
+          exposed = [item for item in forbidden_secrets if item in validation_text]
+          if exposed:
+              raise SystemExit("Production secrets must not appear in source-validation workflow: " + ", ".join(exposed))
+
+          setup_path = Path("SETUP-AR.md")
+          setup_text = setup_path.read_text(encoding="utf-8")
+          setup_required = [
+              "sodfa-validation",
+              "sodfa-production",
+              "SODFA_VALIDATION_SOURCE_READ_TOKEN",
+              "SODFA_PROD_SOURCE_READ_TOKEN",
+              "SODFA_PROD_ANDROID_KEYSTORE_BASE64",
+              "SODFA_PROD_UPDATE_PRIVATE_KEY_PEM",
+              "SODFA_PROD_UPDATE_PUBLIC_KEY_BASE64",
+              "SODFA_PROD_DEPLOY_SSH_KEY",
+              "SODFA_BUILDER_RELEASE_DISPATCH_TOKEN",
+              "SODFA_PROD_ORACLE_SSH_KEY",
+              "Require a pull request before merging",
+              "Force pushes",
+          ]
+          missing_setup = [item for item in setup_required if item not in setup_text]
+          if missing_setup:
+              raise SystemExit("Arabic GitHub setup guide is incomplete: " + ", ".join(missing_setup))
+
+          unpinned = []
+          for workflow in Path(".github/workflows").glob("*.yml"):
+              for number, line in enumerate(workflow.read_text(encoding="utf-8").splitlines(), 1):
+                  match = re.match(r"^\s*uses:\s*(\S+)\s*$", line)
+                  if not match:
+                      continue
+                  action = match.group(1)
+                  if action.startswith("./"):
+                      continue
+                  if not re.fullmatch(r"[^@\s]+@[0-9a-f]{40}", action):
+                      unpinned.append(f"{workflow}:{number}:{action}")
+          if unpinned:
+              raise SystemExit("All external GitHub Actions must be pinned to full commit SHAs: " + ", ".join(unpinned))
+
+          print("SODFA builder policy checks passed.")
+          PY

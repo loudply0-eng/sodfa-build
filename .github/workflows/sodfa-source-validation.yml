@@ -1,0 +1,292 @@
+name: SODFA Private Source Validation
+
+on:
+  workflow_dispatch:
+    inputs:
+      source_ref:
+        description: "Private source branch or commit to validate (no production secrets are used)"
+        required: true
+        type: string
+        default: "main"
+      confirm_validation:
+        description: "Confirm a secret-free validation run"
+        required: true
+        type: boolean
+        default: false
+
+permissions:
+  contents: read
+
+concurrency:
+  group: sodfa-source-validation
+  cancel-in-progress: false
+
+jobs:
+  validate:
+    if: github.ref == 'refs/heads/main' && inputs.confirm_validation == true
+    runs-on: ubuntu-latest
+    timeout-minutes: 75
+    environment:
+      name: sodfa-validation
+    env:
+      NODE_ENV: test
+      DATABASE_URL: postgres://sodfa:sodfa_ci_only@127.0.0.1:5432/sodfa
+      REDIS_URL: redis://127.0.0.1:6379
+      JWT_ISSUER: https://api.sodfa.test
+      JWT_AUDIENCE: sodfa-test
+      SMTP_HOST: 127.0.0.1
+      SMTP_PORT: 1025
+      SMTP_SECURE: 'false'
+      SMTP_FROM: '"SODFA" <no-reply@sodfa.test>'
+      SODFA_API_INTEGRATION: '1'
+    services:
+      postgres:
+        image: postgres:18-alpine
+        env:
+          POSTGRES_DB: sodfa
+          POSTGRES_USER: sodfa
+          POSTGRES_PASSWORD: sodfa_ci_only
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U sodfa -d sodfa"
+          --health-interval 5s
+          --health-timeout 3s
+          --health-retries 20
+      redis:
+        image: redis:8.0-alpine
+        ports:
+          - 6379:6379
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 5s
+          --health-timeout 3s
+          --health-retries 20
+
+    steps:
+      - name: Validate source ref and read-only token
+        shell: bash
+        env:
+          SOURCE_REF: ${{ inputs.source_ref }}
+          SOURCE_TOKEN: ${{ secrets.SODFA_VALIDATION_SOURCE_READ_TOKEN }}
+        run: |
+          set -euo pipefail
+          if [ -z "$SOURCE_TOKEN" ]; then
+            echo "::error::SODFA_VALIDATION_SOURCE_READ_TOKEN is missing from the protected environment."
+            exit 1
+          fi
+          if ! [[ "$SOURCE_REF" =~ ^[A-Za-z0-9._/-]{1,120}$ ]] || [[ "$SOURCE_REF" == *".."* ]]; then
+            echo "::error::The requested private source ref is not a valid branch or commit reference."
+            exit 1
+          fi
+
+      - name: Checkout selected private source ref
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          repository: loudply0-eng/sodfa-
+          ref: ${{ inputs.source_ref }}
+          token: ${{ secrets.SODFA_VALIDATION_SOURCE_READ_TOKEN }}
+          path: source
+          fetch-depth: 1
+          persist-credentials: false
+
+      - name: Validate private workflow syntax and automatic release permissions
+        shell: bash
+        run: |
+          set -euo pipefail
+          ruby -e 'require "yaml"; ARGV.each { |path| YAML.load_file(path, aliases: true); puts "Valid YAML: #{path}" }' source/.github/workflows/*.yml
+          python3 - <<'PY'
+          from pathlib import Path
+
+          path = Path("source/.github/workflows/sodfa-release-dispatch.yml")
+          if not path.is_file():
+              raise SystemExit("Private automatic Android release dispatcher is missing.")
+          text = path.read_text(encoding="utf-8")
+          required = [
+              "name: SODFA Automatic Android Release Dispatch",
+              "push:",
+              "branches: [main]",
+              '"lib/**"',
+              '"android/**"',
+              '"assets/**"',
+              '"pubspec.yaml"',
+              '"pubspec.lock"',
+              '"docs/CHANGELOG.json"',
+              "permissions:",
+              "contents: read",
+              "SODFA_BUILDER_RELEASE_DISPATCH_TOKEN",
+              "SOURCE_SHA: ${{ github.sha }}",
+              "^[0-9a-f]{40}$",
+              "gh workflow run sodfa-secure-release.yml",
+              "--repo loudply0-eng/sodfa-build",
+              "--ref main",
+              "--field confirm_release=true",
+              '--field source_ref="$SOURCE_SHA"',
+          ]
+          missing = [item for item in required if item not in text]
+          if missing:
+              raise SystemExit("Private release dispatcher policy check failed: " + ", ".join(missing))
+          import re
+          exposed = re.findall(r"(?:secrets|vars)\.SODFA_PROD_[A-Z0-9_]+", text)
+          if exposed:
+              raise SystemExit("Private dispatcher must never reference production signing/deployment secrets: " + ", ".join(sorted(set(exposed))))
+          if "pull_request:" in text or "workflow_dispatch:" in text:
+              raise SystemExit("Automatic release dispatch must only run on trusted private main pushes.")
+          print("Private automatic release dispatcher policy checks passed.")
+          PY
+
+      - name: Set up Node.js 26
+        uses: actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e
+        with:
+          node-version: "26"
+
+      - name: Install private API dependencies
+        working-directory: source/server/api
+        shell: bash
+        run: |
+          set -euo pipefail
+          if ! npm install --no-audit --no-fund > "$RUNNER_TEMP/sodfa-api-install.log" 2>&1; then
+            echo "::error::Private API dependency installation failed; private logs are suppressed."
+            exit 1
+          fi
+          echo "API dependency installation passed."
+
+      - name: Audit production API dependencies
+        working-directory: source/server/api
+        shell: bash
+        run: |
+          set -euo pipefail
+          if ! npm audit --omit=dev --audit-level=high > "$RUNNER_TEMP/sodfa-api-audit.log" 2>&1; then
+            echo "::error::The API production dependency audit found a high-severity advisory or could not complete."
+            exit 1
+          fi
+          echo "API production dependency audit passed."
+
+      - name: Apply API database migrations
+        working-directory: source/server/api
+        shell: bash
+        run: |
+          set -euo pipefail
+          if ! JWT_SECRET="$(openssl rand -hex 32)" npm run migrate > "$RUNNER_TEMP/sodfa-api-migrate.log" 2>&1; then
+            echo "::error::Private API database migrations failed; private logs are suppressed."
+            exit 1
+          fi
+          echo "API database migrations passed."
+
+      - name: Run API unit and PostgreSQL/Redis integration tests
+        working-directory: source/server/api
+        shell: bash
+        run: |
+          set -euo pipefail
+          if ! JWT_SECRET="$(openssl rand -hex 32)" npm test > "$RUNNER_TEMP/sodfa-api-tests.log" 2>&1; then
+            echo "::error::API unit or PostgreSQL/Redis integration tests failed; private logs are suppressed."
+            exit 1
+          fi
+          echo "API unit and PostgreSQL/Redis integration tests passed."
+
+      - name: Set up Java
+        uses: actions/setup-java@77dd5b2ce225ea11469928ac317850245a74ae78
+        with:
+          distribution: temurin
+          java-version: "17"
+
+      - name: Set up Flutter
+        uses: subosito/flutter-action@1a449444c387b1966244ae4d4f8c696479add0b2
+        with:
+          flutter-version: "3.50.0"
+          channel: stable
+
+      - name: Install dependencies
+        working-directory: source
+        shell: bash
+        run: |
+          set -euo pipefail
+          if ! flutter pub get > "$RUNNER_TEMP/sodfa-pub-get.log" 2>&1; then
+            echo "::error::Private source dependency installation failed; private logs are suppressed."
+            exit 1
+          fi
+          echo "Dependency installation passed."
+
+      - name: Analyze
+        working-directory: source
+        shell: bash
+        run: |
+          set -euo pipefail
+          if ! flutter analyze --no-fatal-infos > "$RUNNER_TEMP/sodfa-analyze.log" 2>&1; then
+            echo "::error::Private source analysis failed; private logs are suppressed."
+            exit 1
+          fi
+          echo "Flutter analysis passed."
+
+      - name: Run tests
+        working-directory: source
+        shell: bash
+        run: |
+          set -euo pipefail
+          if ! flutter test > "$RUNNER_TEMP/sodfa-tests.log" 2>&1; then
+            echo "::error::Private source tests failed; private logs are suppressed."
+            exit 1
+          fi
+          echo "Flutter tests passed."
+
+      - name: Build debug APK
+        working-directory: source
+        shell: bash
+        run: |
+          set -euo pipefail
+          if ! flutter build apk --debug > "$RUNNER_TEMP/sodfa-debug-build.log" 2>&1; then
+            echo "::error::Private source debug build failed; private logs are suppressed."
+            exit 1
+          fi
+          test -s build/app/outputs/flutter-apk/app-debug.apk
+          echo "Debug APK build passed."
+
+      - name: Create ephemeral release signing key
+        working-directory: source
+        shell: bash
+        run: |
+          set -euo pipefail
+          CI_KEYSTORE_PASSWORD="$(openssl rand -hex 24)"
+          keytool -genkeypair -noprompt -storetype JKS \
+            -keystore android/app/ci-release-smoke.jks \
+            -storepass "$CI_KEYSTORE_PASSWORD" \
+            -keypass "$CI_KEYSTORE_PASSWORD" \
+            -alias ci-release-smoke \
+            -keyalg RSA -keysize 2048 -validity 2 \
+            -dname "CN=SODFA CI smoke test" > "$RUNNER_TEMP/sodfa-ci-keytool.log" 2>&1
+          cat > android/key.properties <<EOF
+          storeFile=ci-release-smoke.jks
+          storePassword=$CI_KEYSTORE_PASSWORD
+          keyAlias=ci-release-smoke
+          keyPassword=$CI_KEYSTORE_PASSWORD
+          EOF
+          chmod 600 android/key.properties android/app/ci-release-smoke.jks
+
+      - name: Build obfuscated release validation APK
+        working-directory: source
+        shell: bash
+        run: |
+          set -euo pipefail
+          if ! flutter build apk --release --obfuscate \
+            --split-debug-info="$RUNNER_TEMP/sodfa-symbols" \
+            --dart-define=SODFA_UPDATE_MANIFEST_URL=https://mahmoudaljuorany.store/updates/sodfa/manifest.json \
+            --dart-define=SODFA_UPDATE_PUBLIC_KEY_BASE64= \
+            > "$RUNNER_TEMP/sodfa-release-build.log" 2>&1; then
+            echo "::error::Private source obfuscated release build failed; private logs are suppressed."
+            exit 1
+          fi
+          APK=build/app/outputs/flutter-apk/app-release.apk
+          test -s "$APK"
+          APKSIGNER="$(find "$ANDROID_HOME/build-tools" -type f -name apksigner | sort -V | tail -n 1)"
+          test -n "$APKSIGNER"
+          "$APKSIGNER" verify --verbose "$APK" > "$RUNNER_TEMP/sodfa-smoke-signature.log" 2>&1
+          echo "Obfuscated release validation build passed."
+
+      - name: Remove ephemeral files and private logs
+        if: always()
+        shell: bash
+        run: |
+          rm -f source/android/key.properties source/android/app/ci-release-smoke.jks
+          rm -rf "$RUNNER_TEMP/sodfa-symbols"
+          rm -f "$RUNNER_TEMP"/sodfa-*.log
+          rm -f "$RUNNER_TEMP"/sodfa-api-*.log
