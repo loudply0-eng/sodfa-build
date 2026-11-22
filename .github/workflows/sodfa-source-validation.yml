@@ -115,7 +115,7 @@ jobs:
               "permissions:",
               "contents: read",
               "SODFA_BUILDER_RELEASE_DISPATCH_TOKEN",
-              "SOURCE_SHA: ${{ github.sha }}",
+              "SOURCE_SHA: " + "$" + "{{ github.sha }}",
               "^[0-9a-f]{40}$",
               "gh workflow run sodfa-secure-release.yml",
               "--repo loudply0-eng/sodfa-build",
