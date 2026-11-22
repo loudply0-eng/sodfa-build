@@ -72,6 +72,7 @@ jobs:
               "workflow_dispatch:",
               "github.ref == 'refs/heads/main'",
               "inputs.confirm_release == true",
+              "github.event_name == ",
               "source_ref:",
               "SOURCE_REF: ${{ inputs.source_ref }}",
               "ref: ${{ inputs.source_ref }}",
@@ -146,28 +147,16 @@ jobs:
           if "pull_request:" in release_text:
               raise SystemExit("The private-source release workflow must not run on pull requests.")
 
-          # A narrowly scoped push trigger is allowed only to validate changes
-          # to this public release workflow itself. Actual private-source releases
-          # are dispatched explicitly for an exact source commit.
-          push_block = re.search(
-              r"(?ms)^  push:\s*\n(?P<body>.*?)(?=^  workflow_dispatch:)",
-              release_text,
-          )
-          if push_block is None:
-              raise SystemExit("The release workflow must retain its restricted workflow_dispatch trigger.")
-          push_text = push_block.group("body")
-          required_push_guards = [
-              "branches:",
-              "- main",
-              "paths:",
-              '".github/workflows/sodfa-secure-release.yml"',
-          ]
-          missing_push_guards = [item for item in required_push_guards if item not in push_text]
-          if missing_push_guards:
-              raise SystemExit(
-                  "Release workflow push trigger must be restricted to main and its own workflow file: "
-                  + ", ".join(missing_push_guards)
-              )
+          # Production releases must be explicitly dispatched by the private source repository.
+          trigger_section = release_text.split("on:", 1)[1].split("permissions:", 1)[0]
+          if "  workflow_dispatch:" not in trigger_section:
+              raise SystemExit("The production release workflow must use workflow_dispatch.")
+          if "  push:" in trigger_section or "  pull_request:" in trigger_section:
+              raise SystemExit("Production release must never run automatically from a public-repository push or pull request.")
+          if "github.event_name == " not in release_text or "workflow_dispatch" not in release_text:
+              raise SystemExit("Production release job must be gated to workflow_dispatch.")
+          if "workflow_dispatch|push" in release_text or "push)" in release_text:
+              raise SystemExit("Production release script must not allow push-triggered releases.")
           if ("scp " in release_text or "ssh " in release_text) and not (
               "openssl pkeyutl -sign -rawin" in release_text
               and "SODFA_PROD_UPDATE_PRIVATE_KEY_PEM" in release_text
