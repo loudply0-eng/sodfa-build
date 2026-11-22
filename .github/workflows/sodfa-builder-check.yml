@@ -143,8 +143,31 @@ jobs:
           if missing_tests:
               raise SystemExit("Remote publication regression-test coverage is incomplete: " + ", ".join(missing_tests))
 
-          if "pull_request:" in release_text or "push:" in release_text:
-              raise SystemExit("The private-source release workflow must not run on pull requests or pushes.")
+          if "pull_request:" in release_text:
+              raise SystemExit("The private-source release workflow must not run on pull requests.")
+
+          # A narrowly scoped push trigger is allowed only to validate changes
+          # to this public release workflow itself. Actual private-source releases
+          # are dispatched explicitly for an exact source commit.
+          push_block = re.search(
+              r"(?ms)^  push:\s*\n(?P<body>.*?)(?=^  workflow_dispatch:)",
+              release_text,
+          )
+          if push_block is None:
+              raise SystemExit("The release workflow must retain its restricted workflow_dispatch trigger.")
+          push_text = push_block.group("body")
+          required_push_guards = [
+              "branches:",
+              "- main",
+              "paths:",
+              '".github/workflows/sodfa-secure-release.yml"',
+          ]
+          missing_push_guards = [item for item in required_push_guards if item not in push_text]
+          if missing_push_guards:
+              raise SystemExit(
+                  "Release workflow push trigger must be restricted to main and its own workflow file: "
+                  + ", ".join(missing_push_guards)
+              )
           if ("scp " in release_text or "ssh " in release_text) and not (
               "openssl pkeyutl -sign -rawin" in release_text
               and "SODFA_PROD_UPDATE_PRIVATE_KEY_PEM" in release_text
