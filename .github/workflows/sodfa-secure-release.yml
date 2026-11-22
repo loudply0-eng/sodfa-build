@@ -180,7 +180,7 @@ jobs:
         with:
           flutter-version: "3.50.0"
           channel: stable
-          cache: true
+          cache: false
 
       - name: Install dependencies
         working-directory: source
