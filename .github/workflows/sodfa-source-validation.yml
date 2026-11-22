@@ -90,7 +90,7 @@ jobs:
           fetch-depth: 1
           persist-credentials: false
 
-      - name: Validate private workflow syntax and automatic release permissions
+      - name: Validate private workflow syntax and public-builder-only execution
         shell: bash
         run: |
           set -euo pipefail
@@ -98,41 +98,32 @@ jobs:
           python3 - <<'PY'
           from pathlib import Path
 
-          path = Path("source/.github/workflows/sodfa-release-dispatch.yml")
-          if not path.is_file():
-              raise SystemExit("Private automatic Android release dispatcher is missing.")
-          text = path.read_text(encoding="utf-8")
-          required = [
-              "name: SODFA Automatic Android Release Dispatch",
-              "push:",
-              "branches: [main]",
-              '"lib/**"',
-              '"android/**"',
-              '"assets/**"',
-              '"pubspec.yaml"',
-              '"pubspec.lock"',
-              '"docs/CHANGELOG.json"',
-              "permissions:",
-              "contents: read",
-              "SODFA_BUILDER_RELEASE_DISPATCH_TOKEN",
-              "SOURCE_SHA: " + "$" + "{{ github.sha }}",
-              "^[0-9a-f]{40}$",
-              "gh workflow run sodfa-secure-release.yml",
-              "--repo loudply0-eng/sodfa-build",
-              "--ref main",
-              "--field confirm_release=true",
-              '--field source_ref="$SOURCE_SHA"',
+          workflows_dir = Path("source/.github/workflows")
+          private_runner_workflows = [
+              "sodfa-api-ci.yml",
+              "sodfa-ci.yml",
+              "sodfa-release-dispatch.yml",
           ]
-          missing = [item for item in required if item not in text]
-          if missing:
-              raise SystemExit("Private release dispatcher policy check failed: " + ", ".join(missing))
-          import re
-          exposed = re.findall(r"(?:secrets|vars)\.SODFA_PROD_[A-Z0-9_]+", text)
-          if exposed:
-              raise SystemExit("Private dispatcher must never reference production signing/deployment secrets: " + ", ".join(sorted(set(exposed))))
-          if "pull_request:" in text or "workflow_dispatch:" in text:
-              raise SystemExit("Automatic release dispatch must only run on trusted private main pushes.")
-          print("Private automatic release dispatcher policy checks passed.")
+          present = [name for name in private_runner_workflows if (workflows_dir / name).exists()]
+          if present:
+              raise SystemExit(
+                  "Private paid-runner workflows must remain removed; run SODFA validation "
+                  "and release from the public sodfa-build repository: " + ", ".join(present)
+              )
+
+          for path in sorted(workflows_dir.glob("*.yml")):
+              text = path.read_text(encoding="utf-8")
+              trigger_section = text.split("permissions:", 1)[0]
+              if "  push:" in trigger_section or "  pull_request:" in trigger_section:
+                  raise SystemExit(
+                      f"Private workflow {path.name} must not start paid Actions jobs on push or pull_request."
+                  )
+              if "  workflow_dispatch:" not in trigger_section:
+                  raise SystemExit(
+                      f"Private operations workflow {path.name} must be explicitly manual-only."
+                  )
+
+          print("Private workflow syntax passed; app CI, validation, and release are delegated to public sodfa-build.")
           PY
 
       - name: Set up Node.js 26
