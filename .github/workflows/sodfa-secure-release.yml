@@ -102,6 +102,15 @@ jobs:
             exit 1
           fi
 
+      - name: Checkout trusted release tooling
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          repository: loudply0-eng/sodfa-build
+          ref: ${{ github.sha }}
+          path: builder
+          fetch-depth: 1
+          persist-credentials: false
+
       - name: Checkout private SODFA source
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
         with:
@@ -450,7 +459,7 @@ jobs:
           ssh -i ~/.ssh/sodfa_deploy_key -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes \
             "$DEPLOY_USER@$DEPLOY_HOST" \
             "bash -s -- '$REMOTE_DIR' '$APK_NAME' '$APK_SHA256' '$BUILD_NUMBER'" \
-            < "$GITHUB_WORKSPACE/scripts/sodfa-remote-publish.sh"
+            < "$GITHUB_WORKSPACE/builder/scripts/sodfa-remote-publish.sh"
 
 
           curl --fail --silent --show-error --max-time 20 \
