@@ -150,7 +150,7 @@ jobs:
           # to this public release workflow itself. Actual private-source releases
           # are dispatched explicitly for an exact source commit.
           push_block = re.search(
-              r"(?ms)^push:\s*\n(?P<body>.*?)(?=^  workflow_dispatch:)",
+              r"(?ms)^  push:\s*\n(?P<body>.*?)(?=^  workflow_dispatch:)",
               release_text,
           )
           if push_block is None:
