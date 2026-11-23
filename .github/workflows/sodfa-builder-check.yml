@@ -74,9 +74,12 @@ jobs:
               "inputs.confirm_release == true",
               "github.event_name == ",
               "source_ref:",
-              "SOURCE_REF: ${{ inputs.source_ref }}",
-              "ref: ${{ inputs.source_ref }}",
-              "^([0-9a-f]{40}|main)$",
+              "SOURCE_REF: " + "$" + "{{ inputs.source_ref || 'main' }}",
+              "EXPECTED_SOURCE_SHA: " + "$" + "{{ inputs.expected_source_sha }}",
+              "ref: refs/heads/" + "$" + "{{ inputs.source_ref || 'main' }}",
+              "git check-ref-format --branch \"$SOURCE_REF\"",
+              "EXPECTED_SOURCE_SHA",
+              "Verify exact private source commit",
               "loudply0-eng/sodfa-",
               "SODFA_PROD_SOURCE_READ_TOKEN",
               "persist-credentials: false",
@@ -147,7 +150,7 @@ jobs:
           if "pull_request:" in release_text:
               raise SystemExit("The private-source release workflow must not run on pull requests.")
 
-          # Production releases must be explicitly dispatched by the private source repository.
+          # Production releases must be explicitly dispatched from the public builder repository.
           trigger_section = release_text.split("on:", 1)[1].split("permissions:", 1)[0]
           if "  workflow_dispatch:" not in trigger_section:
               raise SystemExit("The production release workflow must use workflow_dispatch.")
@@ -171,6 +174,11 @@ jobs:
               "workflow_dispatch:",
               "github.ref == 'refs/heads/main'",
               "inputs.confirm_validation == true",
+              "expected_source_sha:",
+              "EXPECTED_SOURCE_SHA: " + "$" + "{{ inputs.expected_source_sha }}",
+              "ref: refs/heads/" + "$" + "{{ inputs.source_ref }}",
+              "git check-ref-format --branch \"$SOURCE_REF\"",
+              "Verify exact private source commit",
               "SODFA_VALIDATION_SOURCE_READ_TOKEN",
               "persist-credentials: false",
               "name: sodfa-validation",
@@ -227,7 +235,10 @@ jobs:
               "SODFA_PROD_ORACLE_SSH_KEY",
               "gh workflow run sodfa-source-validation.yml",
               "gh workflow run sodfa-secure-release.yml",
-              "SOURCE_SHA",
+              "expected_source_sha",
+              "expected_source_sha=\"$SOURCE_SHA\"",
+              "refs/heads/",
+              "Verify exact private source commit",
               "Standard GitHub-hosted runner",
               "لا يحتاج المستودع الخاص إلى رمز لإطلاق البناء العام",
               "Require a pull request before merging",

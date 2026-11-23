@@ -108,47 +108,50 @@
 1. افتح المستودع العام `sodfa-build`.
 2. انتقل إلى **Actions → SODFA Private Source Validation**.
 3. اختر Run workflow على فرع البناء `main`.
-4. أدخل في `source_ref` قيمة SHA كاملة من 40 حرفاً للنسخة المراد فحصها. من Termius يمكن جلب SHA الحالي للمصدر بالأمر:
+4. أدخل اسم فرع المصدر الخاص في `source_ref`، مثلاً `main` أو `security/use-public-builder-only`.
+5. أدخل SHA الكامل ذو 40 حرفاً للنسخة المطلوبة في `expected_source_sha`.
+6. اجعل `confirm_validation` = `true`.
+7. وافق على تشغيل بيئة `sodfa-validation` عندما يطلب GitHub ذلك.
 
-   ```bash
-   gh api repos/loudply0-eng/sodfa-/commits/main --jq .sha
-   ```
-5. اجعل `confirm_validation` = `true`.
-6. وافق على تشغيل بيئة `sodfa-validation` عندما يطلب GitHub ذلك.
-
-يجب أن ينجح تدقيق API، وPostgreSQL/Redis migrations والاختبارات، وFlutter analyze وtests وبناء Debug وRelease تجريبي. هذا الاختبار لا يستخدم مفاتيح الإنتاج ولا يرفع APK للسيرفر.
+الفاحص يسحب الفرع باستخدام المرجع `refs/heads/<branch>`، ثم ينفّذ خطوة **Verify exact private source commit** ويقارن ناتج `git rev-parse HEAD` مع `expected_source_sha`. إذا تحرك الفرع أو اختلف SHA، يتوقف قبل فحوص API وFlutter والبناء.
 
 ## خامساً: إطلاق الفحص والإصدار من المستودع العام فقط
 
 لا نشغّل فحوص API أو Flutter أو بناء APK أو مهمة إطلاق من المستودع الخاص؛ ذلك المستودع يبقى للمصدر فقط، حتى لا تُستهلك حصته المدفوعة. ملفات CI القديمة ومهمة الإطلاق الخاصة تُزال من المصدر. جميع مهام البناء والفحص والإصدار تعمل من `sodfa-build` باستخدام Standard GitHub-hosted runners في المستودع العام.
 
-بعد حفظ تغييرات المصدر ودمجها في `main` الخاص، استخدم Termius لجلب SHA دقيق ثم شغّل فحص المصدر من المستودع العام:
+بعد حفظ تغييرات المصدر في الفرع الخاص، استخدم Termius لجلب SHA دقيق. هذا المثال يفحص فرع `main`:
 
 ```bash
-SOURCE_SHA="$(gh api repos/loudply0-eng/sodfa-/commits/main --jq .sha)"
+SOURCE_BRANCH="main"
+SOURCE_SHA="$(gh api "repos/loudply0-eng/sodfa-/commits/$SOURCE_BRANCH" --jq .sha)"
 echo "Source commit: $SOURCE_SHA"
-gh workflow run sodfa-source-validation.yml \\
-  --repo loudply0-eng/sodfa-build \\
-  --ref main \\
-  --field source_ref="$SOURCE_SHA" \\
+
+gh workflow run sodfa-source-validation.yml \
+  --repo loudply0-eng/sodfa-build \
+  --ref main \
+  --field source_ref="$SOURCE_BRANCH" \
+  --field expected_source_sha="$SOURCE_SHA" \
   --field confirm_validation=true
 ```
+
+لفحص فرع طلب دمج، عيّن `SOURCE_BRANCH` إلى اسم ذلك الفرع، واجعل `SOURCE_SHA` هو SHA الذي تريد اختباره. لا تمرر SHA على أنه اسم فرع.
 
 تابع النتيجة:
 
 ```bash
-gh run list --repo loudply0-eng/sodfa-build \\
+gh run list --repo loudply0-eng/sodfa-build \
   --workflow sodfa-source-validation.yml --limit 5
 ```
 
 لا تطلق الإصدار قبل نجاح فحص المصدر على SHA نفسه. بعد نجاحه، ابدأ الإصدار من المستودع العام بهذا الأمر فقط عندما تكون مستعداً للنشر:
 
 ```bash
-gh workflow run sodfa-secure-release.yml \\
-  --repo loudply0-eng/sodfa-build \\
-  --ref main \\
-  --field confirm_release=true \\
-  --field source_ref="$SOURCE_SHA"
+gh workflow run sodfa-secure-release.yml \
+  --repo loudply0-eng/sodfa-build \
+  --ref main \
+  --field confirm_release=true \
+  --field source_ref="$SOURCE_BRANCH" \
+  --field expected_source_sha="$SOURCE_SHA"
 ```
 
 قد يطلب GitHub موافقتك على بيئة `sodfa-production`؛ لا توافق إلا بعد مراجعة SHA وملخص الإصدار. مسار الإنتاج يبني APK موقّعاً، يتحقق من التوقيع وملف manifest، ثم ينشر إلى Oracle. تشغيله يستهلك وقت GitHub Actions للمستودع العام، ولا يستهلك حصة المستودع الخاص عند استخدام Standard GitHub-hosted runner.
