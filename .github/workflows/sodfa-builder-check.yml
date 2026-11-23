@@ -150,7 +150,7 @@ jobs:
           if "pull_request:" in release_text:
               raise SystemExit("The private-source release workflow must not run on pull requests.")
 
-          # Production releases must be explicitly dispatched by the private source repository.
+          # Production releases must be explicitly dispatched from the public builder repository.
           trigger_section = release_text.split("on:", 1)[1].split("permissions:", 1)[0]
           if "  workflow_dispatch:" not in trigger_section:
               raise SystemExit("The production release workflow must use workflow_dispatch.")
@@ -235,7 +235,10 @@ jobs:
               "SODFA_PROD_ORACLE_SSH_KEY",
               "gh workflow run sodfa-source-validation.yml",
               "gh workflow run sodfa-secure-release.yml",
-              "SOURCE_SHA",
+              "expected_source_sha",
+              "expected_source_sha=\"$SOURCE_SHA\"",
+              "refs/heads/",
+              "Verify exact private source commit",
               "Standard GitHub-hosted runner",
               "لا يحتاج المستودع الخاص إلى رمز لإطلاق البناء العام",
               "Require a pull request before merging",
