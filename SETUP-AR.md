@@ -108,13 +108,12 @@
 1. افتح المستودع العام `sodfa-build`.
 2. انتقل إلى **Actions → SODFA Private Source Validation**.
 3. اختر Run workflow على فرع البناء `main`.
-4. أدخل في `source_ref` قيمة SHA كاملة من 40 حرفاً للنسخة المراد فحصها. من Termius يمكن جلب SHA الحالي للمصدر بالأمر:
+4. أدخل اسم فرع المصدر في `source_ref` (مثلاً `main` أو `security/use-public-builder-only`).
+5. أدخل SHA الكامل ذو 40 حرفاً للنسخة المتوقعة في `expected_source_sha`.
+6. اجعل `confirm_validation` = `true`.
+7. وافق على تشغيل بيئة `sodfa-validation` عندما يطلب GitHub ذلك.
 
-   ```bash
-   gh api repos/loudply0-eng/sodfa-/commits/main --jq .sha
-   ```
-5. اجعل `confirm_validation` = `true`.
-6. وافق على تشغيل بيئة `sodfa-validation` عندما يطلب GitHub ذلك.
+الفاحص يسحب الفرع أولاً ثم يقارن `git rev-parse HEAD` مع `expected_source_sha`. إذا تحرك الفرع أو لم يطابق SHA المطلوب، يتوقف قبل الفحوصات.
 
 يجب أن ينجح تدقيق API، وPostgreSQL/Redis migrations والاختبارات، وFlutter analyze وtests وبناء Debug وRelease تجريبي. هذا الاختبار لا يستخدم مفاتيح الإنتاج ولا يرفع APK للسيرفر.
 
