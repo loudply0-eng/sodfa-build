@@ -191,8 +191,30 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          if ! JWT_SECRET="$(openssl rand -hex 32)" npm test > "$RUNNER_TEMP/sodfa-api-tests.log" 2>&1; then
-            echo "::error::API unit or PostgreSQL/Redis integration tests failed; private logs are suppressed."
+          if ! JWT_SECRET="$(openssl rand -hex 32)" npm test -- --test-reporter=tap > "$RUNNER_TEMP/sodfa-api-tests.log" 2>&1; then
+            # Emit only an opaque count, a failure category, and a test source
+            # line. Never publish test names, assertion values, or stack traces
+            # from the private source repository to this public builder.
+            node - "$RUNNER_TEMP/sodfa-api-tests.log" <<'NODE'
+          const fs = require('node:fs');
+          const output = fs.readFileSync(process.argv[2], 'utf8');
+          const failed = (output.match(/^not ok \d+/gm) || []).length;
+          const types = [...output.matchAll(/^  failureType: '([^']+)'/gm)]
+            .map((match) => match[1])
+            .filter((value, index, all) => all.indexOf(value) === index);
+          const locations = [...output.matchAll(/(?:file:\/\/[^\s']+\/test\/([^/\s]+\.test\.js):(\d+):\d+|\/test\/([^/\s]+\.test\.js):(\d+):\d+)/g)]
+            .map((match) => {
+              const file = match[1] || match[3];
+              const line = match[2] || match[4];
+              return file + ':' + line;
+            })
+            .filter((value, index, all) => all.indexOf(value) === index)
+            .slice(0, 10);
+          console.error('Private API test failure count: ' + failed);
+          console.error('Private API failure categories: ' + (types.join(', ') || 'not available'));
+          console.error('Private API test locations: ' + (locations.join(', ') || 'not available'));
+          NODE
+            echo "::error::API unit or PostgreSQL/Redis integration tests failed; private test names and assertion details remain suppressed."
             exit 1
           fi
           echo "API unit and PostgreSQL/Redis integration tests passed."
