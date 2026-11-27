@@ -368,7 +368,11 @@ jobs:
           print("Severity counts: " + ", ".join(
               f"{level}={counts[level]}" for level in ("error", "warning", "info") if counts[level]
           ))
-          for severity, path, row, column, code in diagnostics[:40]:
+          severity_order = {"error": 0, "warning": 1, "info": 2}
+          diagnostics.sort(key=lambda item: (
+              severity_order[item[0]], item[1], int(item[2]), int(item[3])
+          ))
+          for severity, path, row, column, code in diagnostics[:60]:
               print(f"{severity}: {path}:{row}:{column} [{code}]")
           if not diagnostics:
               likely = sum(1 for line in log.splitlines() if re.search(r"\b(error|warning)\b", line, re.I))
