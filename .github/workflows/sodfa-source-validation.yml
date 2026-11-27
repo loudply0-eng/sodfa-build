@@ -191,52 +191,105 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          if ! JWT_SECRET="$(openssl rand -hex 32)" npm test -- --test-reporter=tap > "$RUNNER_TEMP/sodfa-api-tests.log" 2>&1; then
-            # Emit only an opaque count, failure metadata, and relative source
-            # locations. Never publish test names, assertion values, or stack traces
-            # from the private source repository to this public builder.
+          cat > "$RUNNER_TEMP/sodfa-safe-test-reporter.mjs" <<'REPORTER'
+          const allowedNames = new Set([
+            'AssertionError', 'TypeError', 'ReferenceError', 'RangeError',
+            'SyntaxError', 'Error', 'TimeoutError', 'AbortError', 'FastifyError',
+          ]);
+          const allowedOperators = new Set([
+            'strictEqual', 'notStrictEqual', 'deepStrictEqual', 'notDeepStrictEqual',
+            'equal', 'notEqual', 'deepEqual', 'notDeepEqual', 'ok', 'match',
+            'doesNotMatch', 'throws', 'doesNotThrow', 'rejects', 'doesNotReject',
+          ]);
+          const safeScalar = (value) =>
+            value === null ||
+            typeof value === 'boolean' ||
+            (typeof value === 'number' && Number.isFinite(value));
+
+          export default async function* sodfaSafeReporter(events) {
+            for await (const event of events) {
+              if (event.type !== 'test:fail') continue;
+              const details = event.data?.details ?? {};
+              const errorChain = [];
+              const seen = new Set();
+              let current = details.error;
+
+              for (let depth = 0; current && depth < 4 && !seen.has(current); depth += 1) {
+                seen.add(current);
+                const item = {};
+                if (allowedNames.has(current.name)) item.name = current.name;
+                if (typeof current.code === 'string' && /^ERR_[A-Z0-9_]{1,48}$/.test(current.code)) {
+                  item.code = current.code;
+                }
+                if (allowedOperators.has(current.operator)) item.operator = current.operator;
+                for (const key of ['expected', 'actual']) {
+                  if (Object.hasOwn(current, key) && safeScalar(current[key])) item[key] = current[key];
+                }
+                if (typeof current.stack === 'string') {
+                  const frames = [...current.stack.matchAll(
+                    /\/source\/server\/api\/((?:src|test)\/[^()\s]+?\.js):(\d+):(\d+)/g,
+                  )]
+                    .map((match) => match[1] + ':' + match[2])
+                    .filter((value, index, all) => all.indexOf(value) === index)
+                    .slice(0, 6);
+                  if (frames.length) item.frames = frames;
+                }
+                if (Object.keys(item).length) errorChain.push(item);
+                current = current.cause instanceof Error ? current.cause : null;
+              }
+
+              const testPath = String(event.data?.file ?? '').match(
+                /\/source\/server\/api\/((?:src|test)\/[^:\s]+\.js)$/,
+              );
+              const report = {
+                failureType: typeof details.type === 'string' && /^[A-Za-z]+$/.test(details.type)
+                  ? details.type
+                  : 'unknown',
+                testLocation: testPath ? testPath[1] + ':' + (Number(event.data?.line) || 0) : 'not available',
+                errorChain,
+              };
+              yield JSON.stringify(report) + '\n';
+            }
+          }
+          REPORTER
+
+          if ! JWT_SECRET="$(openssl rand -hex 32)" npm test -- --test-reporter="$RUNNER_TEMP/sodfa-safe-test-reporter.mjs" > "$RUNNER_TEMP/sodfa-api-tests.log" 2>&1; then
             node - "$RUNNER_TEMP/sodfa-api-tests.log" <<'NODE'
           const fs = require('node:fs');
           const output = fs.readFileSync(process.argv[2], 'utf8');
-          const failed = (output.match(/^not ok \d+/gm) || []).length;
-          const types = [...output.matchAll(/^  failureType: '([^']+)'/gm)]
-            .map((match) => match[1])
-            .filter((value, index, all) => all.indexOf(value) === index);
-          const locationPattern = /(?:file:\/\/)?[^\s'()]*(?:\/source\/server\/api\/|^)((?:src|test)\/[^\s'()]+?\.js):(\d+):\d+/gm;
-          const locations = [...output.matchAll(locationPattern)]
-            .map((match) => match[1] + ':' + match[2])
-            .filter((value, index, all) => all.indexOf(value) === index)
-            .slice(0, 15);
-          const errorNames = [...output.matchAll(/^\s+name: '([^']+)'/gm)]
-            .map((match) => match[1])
-            .filter((value, index, all) => all.indexOf(value) === index);
-          const errorCodes = [...output.matchAll(/^\s+code: '([^']+)'/gm)]
-            .map((match) => match[1])
-            .filter((value, index, all) => all.indexOf(value) === index);
-          const allowedOperators = new Set([
-            'strictEqual', 'notStrictEqual', 'deepStrictEqual', 'notDeepStrictEqual',
-            'equal', 'notEqual', 'deepEqual', 'notDeepEqual', 'ok', 'match', 'doesNotMatch',
-            'throws', 'doesNotThrow', 'rejects', 'doesNotReject',
-          ]);
-          const operators = [...output.matchAll(/^\s+operator: '([A-Za-z]+)'/gm)]
-            .map((match) => match[1])
-            .filter((value) => allowedOperators.has(value));
-          const safeScalars = [...output.matchAll(/^\s+(expected|actual): (true|false|null|-?\d+(?:\.\d+)?)\s*$/gm)];
-          const scalarSummary = ['expected', 'actual'].map((key) => {
-            const values = [...new Set(safeScalars.filter((match) => match[1] === key).map((match) => match[2]))];
-            return values.length ? key + '=' + values.join(',') : '';
-          }).filter(Boolean).join(' ');
-          const assertionMetadata = [
-            operators.length ? 'operator=' + [...new Set(operators)].join(',') : '',
-            scalarSummary,
-          ].filter(Boolean).join(' ').slice(0, 120);
-          console.error('Private API test failure count: ' + failed);
-          console.error('Private API failure categories: ' + (types.join(', ') || 'not available'));
-          console.error('Private API error metadata: ' + [...errorNames, ...errorCodes].join(', ').slice(0, 160));
-          console.error('Private API assertion metadata: ' + (assertionMetadata || 'not available'));
-          console.error('Private API source locations: ' + (locations.join(', ') || 'not available'));
+          const reports = output.split(/\r?\n/).filter(Boolean).flatMap((line) => {
+            try {
+              const value = JSON.parse(line);
+              return value && typeof value === 'object' ? [value] : [];
+            } catch {
+              return [];
+            }
+          });
+          const unique = (values) => [...new Set(values.filter((value) => typeof value === 'string'))];
+          const failures = reports.filter((report) => report.failureType);
+          const errors = failures.flatMap((report) => Array.isArray(report.errorChain) ? report.errorChain : []);
+          const names = unique(errors.map((item) => item.name));
+          const codes = unique(errors.map((item) => item.code));
+          const operators = unique(errors.map((item) => item.operator));
+          const frames = unique(errors.flatMap((item) => Array.isArray(item.frames) ? item.frames : [])).slice(0, 12);
+          const scalarPairs = errors
+            .filter((item) => Object.hasOwn(item, 'expected') || Object.hasOwn(item, 'actual'))
+            .map((item) => {
+              const expected = Object.hasOwn(item, 'expected') ? String(item.expected) : '?';
+              const actual = Object.hasOwn(item, 'actual') ? String(item.actual) : '?';
+              return 'expected=' + expected + ',actual=' + actual;
+            });
+          const locations = unique(failures.map((item) => item.testLocation)).slice(0, 5);
+          console.error('Private API test failure count: ' + failures.length);
+          console.error('Private API failure categories: ' + unique(failures.map((item) => item.failureType)).join(', '));
+          console.error('Private API root error names: ' + (names.join(', ') || 'not available'));
+          console.error('Private API root error codes: ' + (codes.join(', ') || 'not available'));
+          console.error('Private API assertion operators: ' + (operators.join(', ') || 'not available'));
+          console.error('Private API safe scalar values: ' + (unique(scalarPairs).slice(0, 5).join('; ') || 'not available'));
+          console.error('Private API test locations: ' + (locations.join(', ') || 'not available'));
+          console.error('Private API source frames: ' + (frames.join(', ') || 'not available'));
           NODE
-            echo "::error::API unit or PostgreSQL/Redis integration tests failed; private test names and assertion details remain suppressed."
+            echo "::error::API unit or PostgreSQL/Redis integration tests failed; private test names, messages, string values, and full stack traces remain suppressed."
             exit 1
           fi
           echo "API unit and PostgreSQL/Redis integration tests passed."
