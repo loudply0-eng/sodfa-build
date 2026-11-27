@@ -254,6 +254,7 @@ jobs:
           }
           REPORTER
 
+          export SODFA_SAFE_DIAGNOSTIC_FILE="$RUNNER_TEMP/sodfa-safe-diagnostic.json"
           if ! JWT_SECRET="$(openssl rand -hex 32)" npm test -- --test-reporter="$RUNNER_TEMP/sodfa-safe-test-reporter.mjs" > "$RUNNER_TEMP/sodfa-api-tests.log" 2>&1; then
             node - "$RUNNER_TEMP/sodfa-api-tests.log" <<'NODE'
           const fs = require('node:fs');
@@ -289,6 +290,13 @@ jobs:
           console.error('Private API safe scalar values: ' + (unique(scalarPairs).slice(0, 5).join('; ') || 'not available'));
           console.error('Private API test locations: ' + (locations.join(', ') || 'not available'));
           console.error('Private API source frames: ' + (frames.join(', ') || 'not available'));
+          try {
+            const direct = JSON.parse(fs.readFileSync(process.env.SODFA_SAFE_DIAGNOSTIC_FILE, 'utf8'));
+            const chain = Array.isArray(direct.chain) ? direct.chain : [];
+            console.error('Private API direct-caught error chain: ' + JSON.stringify(chain));
+          } catch {
+            console.error('Private API direct-caught error chain: not available');
+          }
           NODE
             echo "::error::API unit or PostgreSQL/Redis integration tests failed; private test names, messages, string values, and full stack traces remain suppressed."
             exit 1
