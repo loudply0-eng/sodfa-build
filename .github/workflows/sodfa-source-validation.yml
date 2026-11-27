@@ -198,11 +198,11 @@ jobs:
             node - "$RUNNER_TEMP/sodfa-api-tests.log" <<'NODE'
           const fs = require('node:fs');
           const output = fs.readFileSync(process.argv[2], 'utf8');
-          const failed = (output.match(/^not ok \\d+/gm) || []).length;
+          const failed = (output.match(/^not ok \d+/gm) || []).length;
           const types = [...output.matchAll(/^  failureType: '([^']+)'/gm)]
             .map((match) => match[1])
             .filter((value, index, all) => all.indexOf(value) === index);
-          const locations = [...output.matchAll(/(?:file:\\/\\/[^\\s']+\\/test\\/([^/\\s']+\\.test\\.js):(\\d+):\\d+|\\/test\\/([^/\\s']+\\.test\\.js):(\\d+):\\d+)/g)]
+          const locations = [...output.matchAll(/(?:file:\/\/[^\s']+\/test\/([^/\s]+\.test\.js):(\d+):\d+|\/test\/([^/\s]+\.test\.js):(\d+):\d+)/g)]
             .map((match) => {
               const file = match[1] || match[3];
               const line = match[2] || match[4];
