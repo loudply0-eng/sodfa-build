@@ -1,6 +1,9 @@
 name: SODFA Private Source Validation
 
 on:
+  push:
+    branches:
+      - ci/sodfa-build10-validation
   workflow_dispatch:
     inputs:
       source_ref:
@@ -27,7 +30,9 @@ concurrency:
 
 jobs:
   validate:
-    if: github.ref == 'refs/heads/main' && inputs.confirm_validation == true
+    if: |
+      (github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/main' && inputs.confirm_validation == true) ||
+      (github.event_name == 'push' && github.ref == 'refs/heads/ci/sodfa-build10-validation' && github.actor == 'loudply0-eng' && contains(github.event.head_commit.message, '[sodfa-validation]'))
     runs-on: ubuntu-latest
     timeout-minutes: 75
     environment:
@@ -71,8 +76,8 @@ jobs:
       - name: Validate source ref and read-only token
         shell: bash
         env:
-          SOURCE_REF: ${{ inputs.source_ref }}
-          EXPECTED_SOURCE_SHA: ${{ inputs.expected_source_sha }}
+          SOURCE_REF: ${{ inputs.source_ref || 'release/signed-update-manifest-0.1.9-build10' }}
+          EXPECTED_SOURCE_SHA: ${{ inputs.expected_source_sha || '258697ca6329479b14f259bb16d2e2b831921ce9' }}
           SOURCE_TOKEN: ${{ secrets.SODFA_VALIDATION_SOURCE_READ_TOKEN }}
         run: |
           set -euo pipefail
@@ -93,7 +98,7 @@ jobs:
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
         with:
           repository: loudply0-eng/sodfa-
-          ref: refs/heads/${{ inputs.source_ref }}
+          ref: refs/heads/${{ inputs.source_ref || 'release/signed-update-manifest-0.1.9-build10' }}
           token: ${{ secrets.SODFA_VALIDATION_SOURCE_READ_TOKEN }}
           path: source
           fetch-depth: 1

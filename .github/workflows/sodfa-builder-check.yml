@@ -176,7 +176,7 @@ jobs:
               "inputs.confirm_validation == true",
               "expected_source_sha:",
               "EXPECTED_SOURCE_SHA: " + "$" + "{{ inputs.expected_source_sha }}",
-              "ref: refs/heads/" + "$" + "{{ inputs.source_ref }}",
+              "ref: refs/heads/" + "$" + "{{ inputs.source_ref || 'release/signed-update-manifest-0.1.9-build10' }}",
               "git check-ref-format --branch \"$SOURCE_REF\"",
               "Verify exact private source commit",
               "SODFA_VALIDATION_SOURCE_READ_TOKEN",
