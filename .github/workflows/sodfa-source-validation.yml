@@ -344,20 +344,24 @@ jobs:
           import sys
 
           log = Path(sys.argv[1]).read_text(encoding="utf-8", errors="replace")
-          pattern = re.compile(
-              r"^\\s*(error|warning|info)\\s+•\\s+.*?\\s+•\\s+"
-              r"((?:lib|test|integration_test)/[A-Za-z0-9_./-]+\\.dart):"
-              r"(\\d+):(\\d+)(?:\\s+•\\s+([a-z0-9_]+))?\\s*$"
-          )
           diagnostics = []
           for line in log.splitlines():
-              match = pattern.match(line)
-              if not match:
+              severity_match = re.search(r"\b(error|warning|info)\b", line, re.I)
+              path_match = re.search(
+                  r"((?:lib|test|integration_test)/[A-Za-z0-9_./-]+\.dart):(\d+):(\d+)",
+                  line,
+              )
+              if not severity_match or not path_match:
                   continue
-              severity, path, row, column, code = match.groups()
+              severity = severity_match.group(1).lower()
+              path, row, column = path_match.groups()
               if ".." in Path(path).parts:
                   continue
-              diagnostics.append((severity, path, row, column, code or "code-not-reported"))
+              code = "code-not-reported"
+              tail = line.rsplit("•", 1)[-1].strip()
+              if re.fullmatch(r"[a-z][a-z0-9_]{1,63}", tail):
+                  code = tail
+              diagnostics.append((severity, path, row, column, code))
 
           counts = Counter(item[0] for item in diagnostics)
           print("Sanitized Flutter analysis diagnostic count: " + str(len(diagnostics)))
@@ -367,8 +371,9 @@ jobs:
           for severity, path, row, column, code in diagnostics[:40]:
               print(f"{severity}: {path}:{row}:{column} [{code}]")
           if not diagnostics:
-              count = sum(1 for line in log.splitlines() if re.search(r"\\b(error|warning)\\b", line, re.I))
-              print("Unparsed diagnostic-like lines: " + str(count))
+              likely = sum(1 for line in log.splitlines() if re.search(r"\b(error|warning)\b", line, re.I))
+              print("Unparsed diagnostic-like lines: " + str(likely))
+              print("Analyzer log line count: " + str(len(log.splitlines())))
           PY
             echo "::error::Private source analysis failed; source messages and code remain suppressed."
             exit 1
