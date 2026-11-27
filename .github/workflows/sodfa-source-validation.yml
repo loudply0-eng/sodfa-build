@@ -4,7 +4,7 @@ on:
   workflow_dispatch:
     inputs:
       source_ref:
-        description: "Private source branch to validate; the exact commit is checked against expected_source_sha"
+        description: "Private source branch name or exact 40-character commit SHA to validate"
         required: true
         type: string
         default: "main"
@@ -80,8 +80,12 @@ jobs:
             echo "::error::SODFA_VALIDATION_SOURCE_READ_TOKEN is missing from the protected environment."
             exit 1
           fi
-          if ! git check-ref-format --branch "$SOURCE_REF" >/dev/null 2>&1; then
-            echo "::error::source_ref must be a valid private source branch name."
+          if [[ "$SOURCE_REF" =~ ^[0-9a-f]{40}$ ]]; then
+            echo "Validating pinned private source commit SHA."
+          elif git check-ref-format --branch "$SOURCE_REF" >/dev/null 2>&1; then
+            echo "Validating private source branch: $SOURCE_REF"
+          else
+            echo "::error::source_ref must be a valid branch name or full 40-character lowercase commit SHA."
             exit 1
           fi
           if ! [[ "$EXPECTED_SOURCE_SHA" =~ ^[0-9a-f]{40}$ ]]; then
@@ -93,7 +97,7 @@ jobs:
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
         with:
           repository: loudply0-eng/sodfa-
-          ref: refs/heads/${{ inputs.source_ref }}
+          ref: ${{ inputs.source_ref }}
           token: ${{ secrets.SODFA_VALIDATION_SOURCE_READ_TOKEN }}
           path: source
           fetch-depth: 1
