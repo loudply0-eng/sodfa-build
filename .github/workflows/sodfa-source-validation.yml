@@ -254,6 +254,7 @@ jobs:
           }
           REPORTER
 
+          export SODFA_SAFE_DIAGNOSTIC_FILE="$RUNNER_TEMP/sodfa-safe-diagnostic.json"
           if ! JWT_SECRET="$(openssl rand -hex 32)" npm test -- --test-reporter="$RUNNER_TEMP/sodfa-safe-test-reporter.mjs" > "$RUNNER_TEMP/sodfa-api-tests.log" 2>&1; then
             node - "$RUNNER_TEMP/sodfa-api-tests.log" <<'NODE'
           const fs = require('node:fs');
