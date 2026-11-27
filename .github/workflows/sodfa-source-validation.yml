@@ -337,7 +337,40 @@ jobs:
         run: |
           set -euo pipefail
           if ! flutter analyze --no-fatal-infos > "$RUNNER_TEMP/sodfa-analyze.log" 2>&1; then
-            echo "::error::Private source analysis failed; private logs are suppressed."
+            python3 - "$RUNNER_TEMP/sodfa-analyze.log" <<'PY'
+          from collections import Counter
+          from pathlib import Path
+          import re
+          import sys
+
+          log = Path(sys.argv[1]).read_text(encoding="utf-8", errors="replace")
+          pattern = re.compile(
+              r"^\\s*(error|warning|info)\\s+•\\s+.*?\\s+•\\s+"
+              r"((?:lib|test|integration_test)/[A-Za-z0-9_./-]+\\.dart):"
+              r"(\\d+):(\\d+)(?:\\s+•\\s+([a-z0-9_]+))?\\s*$"
+          )
+          diagnostics = []
+          for line in log.splitlines():
+              match = pattern.match(line)
+              if not match:
+                  continue
+              severity, path, row, column, code = match.groups()
+              if ".." in Path(path).parts:
+                  continue
+              diagnostics.append((severity, path, row, column, code or "code-not-reported"))
+
+          counts = Counter(item[0] for item in diagnostics)
+          print("Sanitized Flutter analysis diagnostic count: " + str(len(diagnostics)))
+          print("Severity counts: " + ", ".join(
+              f"{level}={counts[level]}" for level in ("error", "warning", "info") if counts[level]
+          ))
+          for severity, path, row, column, code in diagnostics[:40]:
+              print(f"{severity}: {path}:{row}:{column} [{code}]")
+          if not diagnostics:
+              count = sum(1 for line in log.splitlines() if re.search(r"\\b(error|warning)\\b", line, re.I))
+              print("Unparsed diagnostic-like lines: " + str(count))
+          PY
+            echo "::error::Private source analysis failed; source messages and code remain suppressed."
             exit 1
           fi
           echo "Flutter analysis passed."
