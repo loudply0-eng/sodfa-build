@@ -235,7 +235,8 @@ jobs:
                   if (frames.length) item.frames = frames;
                 }
                 if (Object.keys(item).length) errorChain.push(item);
-                current = current.cause instanceof Error ? current.cause : null;
+                const cause = current.cause;
+                current = cause && typeof cause === 'object' ? cause : null;
               }
 
               const testPath = String(event.data?.file ?? '').match(
