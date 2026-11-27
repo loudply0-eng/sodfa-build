@@ -192,8 +192,8 @@ jobs:
         run: |
           set -euo pipefail
           if ! JWT_SECRET="$(openssl rand -hex 32)" npm test -- --test-reporter=tap > "$RUNNER_TEMP/sodfa-api-tests.log" 2>&1; then
-            # Emit only an opaque count, a failure category, and a test source
-            # line. Never publish test names, assertion values, or stack traces
+            # Emit only an opaque count, failure metadata, and relative source
+            # locations. Never publish test names, assertion values, or stack traces
             # from the private source repository to this public builder.
             node - "$RUNNER_TEMP/sodfa-api-tests.log" <<'NODE'
           const fs = require('node:fs');
@@ -202,7 +202,7 @@ jobs:
           const types = [...output.matchAll(/^  failureType: '([^']+)'/gm)]
             .map((match) => match[1])
             .filter((value, index, all) => all.indexOf(value) === index);
-          const locationPattern = /(?:file:\/\/)?[^\\s'()]*(?:\/source\/server\/api\/|^)((?:src|test)\/[^\\s'()]+?\.js):(\d+):\d+/gm;
+          const locationPattern = /(?:file:\/\/)?[^\s'()]*(?:\/source\/server\/api\/|^)((?:src|test)\/[^\s'()]+?\.js):(\d+):\d+/gm;
           const locations = [...output.matchAll(locationPattern)]
             .map((match) => match[1] + ':' + match[2])
             .filter((value, index, all) => all.indexOf(value) === index)
