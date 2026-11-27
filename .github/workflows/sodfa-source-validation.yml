@@ -218,10 +218,10 @@ jobs:
             'equal', 'notEqual', 'deepEqual', 'notDeepEqual', 'ok', 'match', 'doesNotMatch',
             'throws', 'doesNotThrow', 'rejects', 'doesNotReject',
           ]);
-          const operators = [...output.matchAll(/^\\s+operator: '([A-Za-z]+)'/gm)]
+          const operators = [...output.matchAll(/^\s+operator: '([A-Za-z]+)'/gm)]
             .map((match) => match[1])
             .filter((value) => allowedOperators.has(value));
-          const safeScalars = [...output.matchAll(/^\\s+(expected|actual): (true|false|null|-?\\d+(?:\\.\\d+)?)\\s*$/gm)];
+          const safeScalars = [...output.matchAll(/^\s+(expected|actual): (true|false|null|-?\d+(?:\.\d+)?)\s*$/gm)];
           const scalarSummary = ['expected', 'actual'].map((key) => {
             const values = [...new Set(safeScalars.filter((match) => match[1] === key).map((match) => match[2]))];
             return values.length ? key + '=' + values.join(',') : '';
