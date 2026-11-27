@@ -192,8 +192,8 @@ jobs:
         run: |
           set -euo pipefail
           if ! JWT_SECRET="$(openssl rand -hex 32)" npm test -- --test-reporter=tap > "$RUNNER_TEMP/sodfa-api-tests.log" 2>&1; then
-            # Emit only an opaque count, a failure category, and a test source
-            # line. Never publish test names, assertion values, or stack traces
+            # Emit only an opaque count, failure metadata, and relative source
+            # locations. Never publish test names, assertion values, or stack traces
             # from the private source repository to this public builder.
             node - "$RUNNER_TEMP/sodfa-api-tests.log" <<'NODE'
           const fs = require('node:fs');
@@ -202,17 +202,21 @@ jobs:
           const types = [...output.matchAll(/^  failureType: '([^']+)'/gm)]
             .map((match) => match[1])
             .filter((value, index, all) => all.indexOf(value) === index);
-          const locations = [...output.matchAll(/(?:file:\/\/[^\s']+\/test\/([^/\s]+\.test\.js):(\d+):\d+|\/test\/([^/\s]+\.test\.js):(\d+):\d+)/g)]
-            .map((match) => {
-              const file = match[1] || match[3];
-              const line = match[2] || match[4];
-              return file + ':' + line;
-            })
+          const locationPattern = /(?:file:\/\/)?[^\s'()]*(?:\/source\/server\/api\/|^)((?:src|test)\/[^\s'()]+?\.js):(\d+):\d+/gm;
+          const locations = [...output.matchAll(locationPattern)]
+            .map((match) => match[1] + ':' + match[2])
             .filter((value, index, all) => all.indexOf(value) === index)
-            .slice(0, 10);
+            .slice(0, 15);
+          const errorNames = [...output.matchAll(/^\s+name: '([^']+)'/gm)]
+            .map((match) => match[1])
+            .filter((value, index, all) => all.indexOf(value) === index);
+          const errorCodes = [...output.matchAll(/^\s+code: '([^']+)'/gm)]
+            .map((match) => match[1])
+            .filter((value, index, all) => all.indexOf(value) === index);
           console.error('Private API test failure count: ' + failed);
           console.error('Private API failure categories: ' + (types.join(', ') || 'not available'));
-          console.error('Private API test locations: ' + (locations.join(', ') || 'not available'));
+          console.error('Private API error metadata: ' + [...errorNames, ...errorCodes].join(', ').slice(0, 160));
+          console.error('Private API source locations: ' + (locations.join(', ') || 'not available'));
           NODE
             echo "::error::API unit or PostgreSQL/Redis integration tests failed; private test names and assertion details remain suppressed."
             exit 1
